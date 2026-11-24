@@ -5,6 +5,7 @@ import {
 } from "@codeden/contracts";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useSecureFoundationAccounts } from "@/components/harden/secure-foundation/account-store";
 import { platform } from "@/lib/platform";
 import { SecureFoundationSetupPage } from "@/routes/secure-foundation-setup";
 import { clientWith, openDialog } from "./secure-foundation-fixtures";
@@ -31,7 +32,10 @@ const MISSING_GIT: Patch = {
 };
 const row = (id: string) => document.querySelector(`[data-requirement="${id}"]`) as HTMLElement;
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  useSecureFoundationAccounts.setState({ confirmed: {} });
+});
 
 describe("opening Secure Foundation", () => {
   it("goes straight to the form when everything is there", async () => {
@@ -100,7 +104,11 @@ describe("opening Secure Foundation", () => {
   it("is not shown for a tool only an option needs, for Clerk, or when the check can't run", async () => {
     openDialog({
       requirements: async () =>
-        checked({ gh: { state: "missing", found: false }, doppler: { state: "needs_sign_in" } }),
+        checked({
+          gh: { state: "missing", found: false },
+          doppler: { state: "needs_sign_in" },
+          clerk: { state: "needs_sign_in", signedIn: false },
+        }),
     });
     await screen.findByLabelText("Project name");
     expect(screen.queryByTestId("secure-foundation-requirements")).toBeNull();
@@ -118,7 +126,7 @@ describe("opening Secure Foundation", () => {
 });
 
 describe("Secure Foundation Setup, from Settings", () => {
-  it("lists every row with its state when everything is there, Clerk as neither pass nor fail", async () => {
+  it("lists every row with its state when everything is there, Clerk included", async () => {
     renderWithClient(
       <SecureFoundationSetupPage />,
       clientWith({ requirements: async () => checked() }),
@@ -129,12 +137,95 @@ describe("Secure Foundation Setup, from Settings", () => {
     for (const id of ["npm", "git", "doppler", "gh"]) {
       expect(row(id).getAttribute("data-state")).toBe("ok");
     }
-    for (const id of ["convex", "doppler", "github", "vercel"]) {
+    for (const id of ["clerk", "convex", "doppler", "github", "vercel"]) {
       expect(row(`account-${id}`).getAttribute("data-state")).toBe("ok");
     }
-    expect(row("account-clerk").getAttribute("data-state")).toBe("info");
-    expect(row("account-clerk").textContent).toContain("claim your app after the install");
-    expect(screen.getByTestId("create-account-clerk")).toBeTruthy();
     expect(row("gh").textContent).toContain("only for the Deploy option");
+    // Signed in for real: nothing to press, and no manual mark.
+    expect(row("account-clerk").textContent).toContain("Signed in on this computer");
+    expect(row("account-clerk").querySelector("button")).toBeNull();
+  });
+
+  it("starts Clerk's own sign-in from 'Create or Sign-in' when Clerk is signed out", async () => {
+    const startLogin = vi.fn(async () => ({
+      id: "l1",
+      service: "clerk" as const,
+      status: "waiting" as const,
+      url: "https://clerk.clerk.com/oauth/authorize?state=xyz",
+      code: null,
+      message: "Open the link to sign in to Clerk.",
+    }));
+    renderWithClient(
+      <SecureFoundationSetupPage />,
+      clientWith({
+        requirements: async () => checked({ clerk: { state: "needs_sign_in", signedIn: false } }),
+        startLogin,
+      }),
+      { withRouter: true },
+    );
+    const clerk = () => row("account-clerk");
+    // Not a failure: the setup doesn't depend on it.
+    await waitFor(() => expect(clerk()?.getAttribute("data-state")).toBe("info"));
+    expect(clerk().textContent).toContain(
+      "Sign in so your Clerk account is ready to claim your app after the install.",
+    );
+    const button = screen.getByTestId("create-account-clerk");
+    expect(button.textContent?.trim()).toBe("Create or Sign-in");
+    fireEvent.click(button);
+    await waitFor(() => expect(startLogin).toHaveBeenCalledWith("clerk"));
+    await waitFor(() => expect(clerk().textContent).toContain("Open the Clerk sign-in page"));
+  });
+
+  it("opens Clerk's page instead when the sign-in can't be started here (no npx)", async () => {
+    const opened = vi.spyOn(platform, "openExternal").mockImplementation(() => {});
+    const startLogin = vi.fn();
+    renderWithClient(
+      <SecureFoundationSetupPage />,
+      clientWith({
+        requirements: async () => checked({ clerk: { state: "missing", found: false } }),
+        startLogin,
+      }),
+      { withRouter: true },
+    );
+    await waitFor(() => expect(row("account-clerk")?.getAttribute("data-state")).toBe("info"));
+    fireEvent.click(screen.getByTestId("create-account-clerk"));
+    expect(opened).toHaveBeenCalledWith("https://dashboard.clerk.com/sign-in");
+    expect(startLogin).not.toHaveBeenCalled();
+  });
+
+  it("lets the person say they have a Clerk account, keeps that in this browser, and undoes it", async () => {
+    const page = () =>
+      renderWithClient(
+        <SecureFoundationSetupPage />,
+        clientWith({
+          requirements: async () =>
+            checked({ clerk: { state: "unknown", found: true, signedIn: null } }),
+        }),
+        { withRouter: true },
+      );
+    const first = page();
+    const clerk = () => row("account-clerk");
+    // Couldn't be checked (a locked keychain, say): not a failure, and not stuck.
+    await waitFor(() => expect(clerk()?.getAttribute("data-state")).toBe("info"));
+    expect(clerk().textContent).toContain("couldn't be checked from this computer");
+    expect(clerk().textContent).toContain("Having an account is all that's needed");
+
+    fireEvent.click(screen.getByTestId("have-account-clerk"));
+    expect(clerk().getAttribute("data-state")).toBe("ok");
+    expect(clerk().textContent).toContain("You said you have a Clerk account");
+    expect(clerk().textContent).toContain("claim your app after the install");
+    expect(screen.queryByTestId("have-account-clerk")).toBeNull();
+    // Only the yes is kept, in this browser.
+    const kept = localStorage.getItem("codeharden.secure-foundation-accounts") ?? "";
+    expect(JSON.parse(kept).state).toEqual({ confirmed: { clerk: true } });
+
+    // Opened again later: still marked.
+    first.unmount();
+    page();
+    await waitFor(() => expect(clerk()?.getAttribute("data-state")).toBe("ok"));
+
+    fireEvent.click(screen.getByTestId("undo-account-clerk"));
+    expect(clerk().getAttribute("data-state")).toBe("info");
+    expect(screen.getByTestId("have-account-clerk")).toBeTruthy();
   });
 });

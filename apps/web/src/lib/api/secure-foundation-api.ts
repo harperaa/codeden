@@ -128,6 +128,7 @@ const MOCK_REQUIREMENTS: SecureFoundationRequirements = {
     { id: "doppler", version: "3.75.1", signedIn: true, message: "Signed in on this computer." },
     { id: "gh", version: "2.62.0", signedIn: true, message: "Signed in on this computer." },
     { id: "vercel", version: "66.6.0", signedIn: true, message: "Signed in on this computer." },
+    { id: "clerk", version: "4.4.0", signedIn: true, message: "Signed in on this computer." },
   ].map((t) => ({ ...t, state: "ok" as const, found: true }) as SecureFoundationToolCheck),
 };
 

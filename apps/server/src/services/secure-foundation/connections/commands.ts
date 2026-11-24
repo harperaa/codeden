@@ -159,7 +159,41 @@ function convexTeams(output: string): ConvexTeam[] {
   return teams;
 }
 
+const clerkNpx = ["--yes", SECURE_FOUNDATION_NPX_PACKAGES.clerk] as const;
+
+/**
+ * `clerk whoami --json`: one JSON object with the account's `email` when signed in; without a
+ * session it fails with "Not logged in" or "Session expired" (error code `auth_required`).
+ * Only yes, no or unknown is read: the email goes no further than this function. Anything else
+ * (another failure, output that isn't that object) is unknown, never signed out.
+ */
+export function clerkStatus({ code, output }: CliResult): StatusReading {
+  const unknown = { signedIn: null, teams: [] };
+  if (code === null) return unknown;
+  if (code === 0) {
+    const email = jsonIn(output)?.email;
+    return typeof email === "string" && email.length > 0 ? { signedIn: true, teams: [] } : unknown;
+  }
+  return /Not logged in|Session expired|auth_required/.test(output)
+    ? { signedIn: false, teams: [] }
+    : unknown;
+}
+
 export const SERVICE_COMMANDS: Record<SecureFoundationService, ServiceCommands> = {
+  clerk: {
+    label: "Clerk",
+    status: { program: "npx", args: [...clerkNpx, "whoami", "--json"] },
+    // Prints its sign-in page, opens the browser itself and waits for the browser to come back
+    // to this computer. Without a terminal it asks nothing.
+    login: { program: "npx", args: [...clerkNpx, "auth", "login"] },
+    statusTimeoutMs: 120_000,
+    readStatus: clerkStatus,
+    readLogin: (output) => ({ url: linkOn(output, "clerk.com"), code: null }),
+    missing:
+      "Node.js (npx) isn't on the app's path, so Clerk can't be asked. Install Node.js, or start the app from a terminal where `npx` works, then check again.",
+    install: null,
+    manual: "Run `npx clerk auth login` in a terminal, then check again.",
+  },
   convex: {
     label: "Convex",
     // Exits 1 with "Status: Not logged in" when signed out.

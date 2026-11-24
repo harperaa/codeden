@@ -40,13 +40,26 @@ describe("the requirements list", () => {
     for (const tool of SECURE_FOUNDATION_TOOLS) expect(tool.installUrl).toMatch(/^https:\/\//);
     for (const account of SECURE_FOUNDATION_ACCOUNTS) {
       expect(account.url).toMatch(/^https:\/\//);
-      if (account.tool) {
-        expect(secureFoundationTool(account.tool).service).toBeTruthy();
-        expect(secureFoundationTool(account.tool).neededFor).toBe(account.neededFor);
+      expect(secureFoundationTool(account.tool).service).toBeTruthy();
+      expect(secureFoundationTool(account.tool).neededFor).toBe(account.neededFor);
+    }
+  });
+
+  it("keeps Clerk out of everything a setup checks: it is for after the install", () => {
+    expect(secureFoundationTool("clerk")).toMatchObject({ neededFor: "later", service: "clerk" });
+    // Never one of the sign-ins Go asks, whatever the answers.
+    for (const secrets of ["doppler", "env_local"] as const) {
+      for (const deploy of [true, false]) {
+        expect(secureFoundationServices({ secrets, deploy })).not.toContain("clerk");
       }
     }
-    // Clerk has no tool on this computer: it is never a pass or a fail.
-    expect(SECURE_FOUNDATION_ACCOUNTS.filter((a) => !a.tool).map((a) => a.id)).toEqual(["clerk"]);
+    // Signed out, missing or unknown, it never brings the page up or blocks.
+    for (const state of ["needs_sign_in", "missing", "unknown"] as const) {
+      expect(secureFoundationRequirementsSummary({ tools: withTool("clerk", state) })).toEqual({
+        attention: false,
+        blocking: false,
+      });
+    }
   });
 
   it("gives one install line per system, or points at the install page", () => {

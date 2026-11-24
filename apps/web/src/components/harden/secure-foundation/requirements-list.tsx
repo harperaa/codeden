@@ -2,20 +2,17 @@ import {
   SECURE_FOUNDATION_ACCOUNTS,
   SECURE_FOUNDATION_TOOLS,
   type SecureFoundationAccountRequirement,
-  type SecureFoundationNeededFor,
   type SecureFoundationRequirements,
   type SecureFoundationService,
   type SecureFoundationToolCheck,
   secureFoundationTool,
 } from "@codeden/contracts";
-import { Copy, ExternalLink, Info, LogIn, RefreshCw } from "lucide-react";
-import type { ReactNode } from "react";
-import { StateIcon } from "@/components/setup/checklist";
+import { Copy, ExternalLink, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { copyWithFeedback } from "@/lib/copy";
-import { platform } from "@/lib/platform";
-import { cn } from "@/lib/utils";
 import { LoginProgress } from "./connections";
+import { LaterAccountRow } from "./requirements-later-row";
+import { openPage, Retry, Row, type RowState } from "./requirements-row";
 import { useServiceLogin } from "./use-login";
 
 /**
@@ -26,100 +23,20 @@ import { useServiceLogin } from "./use-login";
  * pages, and a sign-in is the service's own, started as the verification view starts it.
  */
 
-type Icon = "checking" | "ok" | "warning" | "missing" | "info";
-
-const ONLY_FOR: Record<SecureFoundationNeededFor, string | null> = {
-  always: null,
-  doppler: "only with secrets in Doppler",
-  deploy: "only for the Deploy option",
-};
-
-function RowIcon({ state }: { state: Icon }) {
-  if (state !== "info") return <StateIcon state={state} />;
-  // Not a pass and not a fail: nothing on this computer can tell.
-  return (
-    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-      <Info className="size-3.5" />
-    </span>
-  );
-}
-
-function Row({
-  id,
-  state,
-  label,
-  neededFor,
-  message,
-  actions,
-  children,
-}: {
-  id: string;
-  state: Icon;
-  label: string;
-  neededFor: SecureFoundationNeededFor;
-  message: string;
-  actions?: ReactNode;
-  children?: ReactNode;
-}) {
-  const failed = state === "missing";
-  return (
-    <div className="px-4 py-3" data-requirement={id} data-state={state}>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 sm:flex-nowrap">
-        <RowIcon state={state} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-[13.5px] font-medium">
-            {label}
-            {ONLY_FOR[neededFor] ? (
-              <span className="text-3xs font-normal text-muted-foreground">
-                {ONLY_FOR[neededFor]}
-              </span>
-            ) : null}
-          </div>
-          <div
-            className={cn(
-              "text-2xs break-words",
-              failed ? "text-status-failed/90" : "text-muted-foreground",
-            )}
-          >
-            {state === "checking" ? "Checking…" : message}
-          </div>
-        </div>
-        {actions && state !== "checking" && (
-          <div className="flex min-w-0 basis-full flex-wrap items-center gap-1.5 pl-9 sm:basis-auto sm:pl-0">
-            {actions}
-          </div>
-        )}
-      </div>
-      {state !== "checking" && children ? <div className="pl-9">{children}</div> : null}
-    </div>
-  );
-}
-
-const open = (url: string) => platform.openExternal(url);
-
-function Retry({ onCheck }: { onCheck: () => void }) {
-  return (
-    <Button size="sm" variant="outline" onClick={onCheck}>
-      <RefreshCw /> Retry
-    </Button>
-  );
-}
-
 function ToolRow({
   check,
   os,
   checking,
   onCheck,
 }: {
-  check: SecureFoundationToolCheck | undefined;
+  check: SecureFoundationToolCheck;
   os: SecureFoundationRequirements["platform"] | undefined;
   checking: boolean;
   onCheck: () => void;
 }) {
-  if (!check) return null;
   const tool = secureFoundationTool(check.id);
   const absent = check.state === "missing" || check.state === "outdated";
-  const state: Icon = checking
+  const state: RowState = checking
     ? "checking"
     : absent
       ? "missing"
@@ -152,7 +69,7 @@ function ToolRow({
                 <Copy /> <span className="truncate">{command}</span>
               </Button>
             )}
-            <Button size="sm" variant="outline" onClick={() => open(tool.installUrl)}>
+            <Button size="sm" variant="outline" onClick={() => openPage(tool.installUrl)}>
               <ExternalLink /> Install guide
             </Button>
           </>
@@ -173,20 +90,7 @@ function ToolRow({
 const ACCOUNT_LINE =
   "Creating an account is all you need to do there. Secure Foundation does the rest.";
 
-function CreateAccount({ account }: { account: SecureFoundationAccountRequirement }) {
-  return (
-    <Button
-      size="sm"
-      variant="outline"
-      onClick={() => open(account.url)}
-      data-testid={`create-account-${account.id}`}
-    >
-      <ExternalLink /> Create an account
-    </Button>
-  );
-}
-
-/** A service whose sign-in a tool on this computer holds. */
+/** A service the setup signs in to: its sign-in is held by a tool on this computer. */
 function ServiceRow({
   account,
   service,
@@ -202,7 +106,7 @@ function ServiceRow({
 }) {
   const { login, error, running, start, cancel } = useServiceLogin(service, onCheck);
   const tool = secureFoundationTool(check.id);
-  const state: Icon = checking
+  const state: RowState = checking
     ? "checking"
     : check.state === "ok"
       ? "ok"
@@ -226,7 +130,16 @@ function ServiceRow({
       actions={
         check.state === "ok" ? null : (
           <>
-            {check.state !== "needs_permission" && <CreateAccount account={account} />}
+            {check.state !== "needs_permission" && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => openPage(account.url)}
+                data-testid={`create-account-${account.id}`}
+              >
+                <ExternalLink /> Create an account
+              </Button>
+            )}
             {check.state === "unknown" && <Retry onCheck={onCheck} />}
             {canSignIn && !running && (
               <Button size="sm" onClick={start}>
@@ -302,29 +215,17 @@ export function RequirementsList({
         <h3 className="mb-1.5 text-xs font-medium">Accounts</h3>
         <div className={LIST}>
           {SECURE_FOUNDATION_ACCOUNTS.map((account) => {
-            const service = account.tool ? secureFoundationTool(account.tool).service : undefined;
-            if (account.tool && service) {
-              return (
-                <ServiceRow
-                  key={account.id}
-                  account={account}
-                  service={service}
-                  check={of(account.tool)}
-                  checking={pending}
-                  onCheck={onCheck}
-                />
-              );
-            }
-            // No tool on this computer can tell: said as it is, never as a pass or a fail.
+            const service = secureFoundationTool(account.tool).service;
+            if (!service) return null;
+            const AccountRow = account.neededFor === "later" ? LaterAccountRow : ServiceRow;
             return (
-              <Row
+              <AccountRow
                 key={account.id}
-                id={`account-${account.id}`}
-                state="info"
-                label={account.label}
-                neededFor={account.neededFor}
-                message={`${account.why} It can't be checked from here.`}
-                actions={<CreateAccount account={account} />}
+                account={account}
+                service={service}
+                check={of(account.tool)}
+                checking={pending}
+                onCheck={onCheck}
               />
             );
           })}

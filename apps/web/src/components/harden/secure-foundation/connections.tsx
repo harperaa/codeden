@@ -15,6 +15,7 @@ const LABEL: Record<SecureFoundationService, string> = {
   doppler: "Doppler",
   github: "GitHub",
   vercel: "Vercel",
+  clerk: "Clerk",
 };
 
 /**

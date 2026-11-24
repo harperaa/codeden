@@ -16,14 +16,23 @@ import {
  * holds. No account name, token or command output is part of it.
  */
 
-/** When a requirement applies: always, with secrets in Doppler, or with the deploy option. */
-export const SecureFoundationNeededFor = z.enum(["always", "doppler", "deploy"]);
+/**
+ * When a requirement applies: always, with secrets in Doppler, with the deploy option, or
+ * `later`: no setup needs it, the person does afterwards (a Clerk account, to claim the app the
+ * install created without one). A `later` requirement is shown and can be put right on the
+ * page, but it is never one of Go's checks, never in the setup brief, and never brings the
+ * page up by itself.
+ */
+export const SecureFoundationNeededFor = z.enum(["always", "doppler", "deploy", "later"]);
 export type SecureFoundationNeededFor = z.infer<typeof SecureFoundationNeededFor>;
 
 /** The oldest Node.js major version the template's install accepts (its Phase 1, step 1). */
 export const SECURE_FOUNDATION_MIN_NODE_MAJOR = 18;
 
-/** The local tools the setup runs. `convex` and `vercel` run through `npx`, pinned. */
+/**
+ * The local tools the setup runs, and `clerk`, which only the page asks. `convex`, `vercel` and
+ * `clerk` run through `npx`, pinned.
+ */
 export const SecureFoundationToolId = z.enum([
   "node",
   "npm",
@@ -32,6 +41,7 @@ export const SecureFoundationToolId = z.enum([
   "doppler",
   "gh",
   "vercel",
+  "clerk",
 ]);
 export type SecureFoundationToolId = z.infer<typeof SecureFoundationToolId>;
 
@@ -149,6 +159,17 @@ export const SECURE_FOUNDATION_TOOLS: readonly SecureFoundationToolRequirement[]
     install: withNode,
     installUrl: "https://nodejs.org/en/download",
   },
+  {
+    id: "clerk",
+    label: "Clerk CLI",
+    neededFor: "later",
+    why: "Only asked whether you are signed in to Clerk. The install itself doesn't use it. Runs through npx: nothing to install.",
+    program: null,
+    npxPackage: SECURE_FOUNDATION_NPX_PACKAGES.clerk,
+    service: "clerk",
+    install: withNode,
+    installUrl: "https://nodejs.org/en/download",
+  },
 ];
 
 /** The tool with this id. */
@@ -184,11 +205,10 @@ export interface SecureFoundationAccountRequirement {
   why: string;
   /** The service's own page to create an account or sign in. */
   url: string;
-  /**
-   * The tool whose sign-in shows that the account exists. Without one (Clerk) nothing on this
-   * computer can tell, and the page says so instead of a pass or a fail.
-   */
-  tool?: SecureFoundationToolId;
+  /** The tool whose sign-in shows that the account exists. */
+  tool: SecureFoundationToolId;
+  /** For a `later` account: what the person uses it for, said in its row. */
+  after?: string;
 }
 
 /** Every account, in the order the page shows them. */
@@ -196,9 +216,12 @@ export const SECURE_FOUNDATION_ACCOUNTS: readonly SecureFoundationAccountRequire
   {
     id: "clerk",
     label: "Clerk",
-    neededFor: "always",
-    why: "You'll need a Clerk account to claim your app after the install.",
-    url: "https://dashboard.clerk.com/sign-up",
+    neededFor: "later",
+    why: "Sign-in and billing for your app.",
+    after: "You'll use it to claim your app after the install.",
+    // Clerk's sign-in page, which offers sign-up too.
+    url: "https://dashboard.clerk.com/sign-in",
+    tool: "clerk",
   },
   {
     id: "convex",
@@ -241,7 +264,7 @@ export function secureFoundationNeeds(
 ): boolean {
   if (neededFor === "doppler") return answers.secrets === "doppler";
   if (neededFor === "deploy") return answers.deploy === true;
-  return true;
+  return neededFor === "always";
 }
 
 /** The services a form's answers need, in the order the step shows them. */

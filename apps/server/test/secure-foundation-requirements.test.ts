@@ -4,7 +4,11 @@ import {
   type SecureFoundationService,
 } from "@codeden/contracts";
 import { describe, expect, it } from "vitest";
-import type { Command } from "../src/services/secure-foundation/connections/commands";
+import {
+  type Command,
+  clerkStatus,
+  SERVICE_COMMANDS,
+} from "../src/services/secure-foundation/connections/commands";
 import type { CliResult } from "../src/services/secure-foundation/connections/process";
 import { checkRequirements } from "../src/services/secure-foundation/requirements";
 
@@ -63,6 +67,75 @@ async function check(
   return { result, asked, of };
 }
 
+describe("Clerk's sign-in, read from `clerk whoami --json`", () => {
+  const EMAIL = "alice@example.com";
+  const signedIn = ran(
+    `${JSON.stringify({ email: EMAIL, localSecretKeySource: null, linked: null }, null, 2)}\n`,
+  );
+
+  it("is yes when the answer names an account, and the email goes no further", () => {
+    const reading = clerkStatus(signedIn);
+    expect(reading).toEqual({ signedIn: true, teams: [] });
+    expect(JSON.stringify(reading)).not.toContain("alice");
+  });
+
+  it("is no for the tool's own not-logged-in and session-expired answers", () => {
+    for (const output of [
+      "Not logged in. Run `clerk auth login` to authenticate\n",
+      "Session expired. Run `clerk auth login` to re-authenticate\n",
+      `${JSON.stringify({ error: { code: "auth_required", message: "…" } })}\n`,
+    ]) {
+      expect(clerkStatus(ran(output, 1))).toEqual({ signedIn: false, teams: [] });
+    }
+  });
+
+  it("is unknown, never signed out, for anything else", () => {
+    for (const result of [
+      TIMED_OUT,
+      ran("Request failed (500)\n", 1),
+      ran("keychain: access denied\n", 1),
+      ran("error: unknown option '--json'\n", 2),
+      ran("not json at all\n"),
+      // An unclaimed app's key in the folder: no account to name.
+      ran(JSON.stringify({ email: null, accountless: { instanceId: "ins_1" }, linked: null })),
+      ran(JSON.stringify({ email: "" })),
+    ]) {
+      expect(clerkStatus(result).signedIn).toBeNull();
+    }
+  });
+
+  it("uses fixed commands on the pinned package, and reads the sign-in page it prints", () => {
+    const { status, login, readLogin } = SERVICE_COMMANDS.clerk;
+    expect([status.program, ...status.args]).toEqual([
+      "npx",
+      "--yes",
+      "clerk@4.4.0",
+      "whoami",
+      "--json",
+    ]);
+    expect([login.program, ...login.args]).toEqual([
+      "npx",
+      "--yes",
+      "clerk@4.4.0",
+      "auth",
+      "login",
+    ]);
+    const url =
+      "https://clerk.clerk.com/oauth/authorize?client_id=abc&redirect_uri=http%3A%2F%2F127.0.0.1%3A5123%2Fcallback&state=xyz";
+    expect(
+      readLogin(`Opening your browser to sign in. If it doesn't open, use this URL:\n  ${url}\n`),
+    ).toEqual({ url, code: null });
+    // A link to another host is not a sign-in page.
+    expect(readLogin("See https://example.com/clerk.com for help").url).toBeNull();
+  });
+
+  it("reaches the page as signed in or not, without the account", async () => {
+    const { result, of } = await check({}, { clerk: { signedIn: false, account: EMAIL } });
+    expect(of("clerk")).toMatchObject({ state: "needs_sign_in", signedIn: false });
+    expect(JSON.stringify(result)).not.toContain("alice");
+  });
+});
+
 describe("the requirements check", () => {
   it("asks each tool for its version only, and reads everything there as ok", async () => {
     const { result, asked, of } = await check();
@@ -82,6 +155,7 @@ describe("the requirements check", () => {
       ["doppler", "ok", "3.75.1"],
       ["gh", "ok", "2.62.0"],
       ["vercel", "ok", "66.6.0"],
+      ["clerk", "ok", "4.4.0"],
     ]);
     expect(of("node")?.signedIn).toBeNull();
     expect(of("convex")?.signedIn).toBe(true);
