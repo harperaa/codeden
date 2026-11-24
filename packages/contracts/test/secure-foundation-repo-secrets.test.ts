@@ -151,15 +151,16 @@ describe("what the person is told about a name", () => {
     // The template's GitHub-side reviews need it; the app and its reviews on this computer don't.
     expect(item.purpose).toContain("The sign-in of the template's Claude review workflows");
     expect(item.purpose).toContain("They run on GitHub's servers, not on this computer");
-    expect(item.purpose).toContain("The template's install doesn't set it.");
+    expect(item.purpose).toContain("The template's deploy skips it by default.");
     expect(item.purpose).toMatch(
       /Reviews you run inside \S+ use your own subscription on this computer and don't need it\./,
     );
     expect(item.consequence).toContain(
-      "the template's Claude review checks have no sign-in and fail shortly after they start",
+      "the template's workflows skip them (a skipped review means no review ran)",
     );
-    expect(item.consequence).toContain("(the review on every pull request)");
+    expect(item.consequence).toContain("have no sign-in and fail shortly after they start");
     expect(item.steps[0]).toContain("`claude setup-token`");
+    expect(item.steps[0]).toContain("not inside a Claude Code session");
     expect(item.steps[1]).toContain("`gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo octo/my-site`");
     expect(item.steps[1]).toContain("Settings › Secrets and variables › Actions");
     expect(item.steps[2]).toContain("https://github.com/apps/claude");
@@ -171,7 +172,7 @@ describe("what the person is told about a name", () => {
     const withDoppler = describeRepoSecret(doppler, false, at("doppler"));
     expect(withDoppler.state).toBe("missing");
     expect(withDoppler.steps[0]).toContain("`node scripts/setup.mjs doppler-create-ci-token`");
-    expect(withDoppler.source?.url).toContain("/.claude/commands/install.md");
+    expect(withDoppler.source?.url).toContain("/.claude/commands/deploy-to-dev.md");
 
     const envLocal = describeRepoSecret(doppler, false, at("env_local"));
     expect(envLocal).toMatchObject({ state: "not_needed", steps: [], source: null });

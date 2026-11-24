@@ -265,22 +265,22 @@ function addSecret(name: string, repository: string): string {
  * (`describeRepoSecret`), so a secret the template adds later is still listed. A fork with
  * another template changes this table.
  *
- * `CLAUDE_CODE_OAUTH_TOKEN`: the template's Claude review workflows read it. The template's own
- * install doesn't set it (its `.claude/commands/install.md` and `deploy-to-dev.md` never name
- * it), so the setup doesn't either; it is the person's to add. The steps are Claude Code's own,
- * from its "Claude Code GitHub Actions" guide (manual setup) and its "Authentication" page
- * (`claude setup-token`).
- * `DOPPLER_TOKEN`: the template's own step (`scripts/setup.mjs doppler-create-ci-token`, in its
- * `.claude/commands/install.md`); the setup session runs it as part of the deploy, so after a
+ * `CLAUDE_CODE_OAUTH_TOKEN`: the template's Claude review workflows read it. The template's
+ * `/deploy-to-dev` (its Step 2.6b) skips it by default and points the person to a terminal of
+ * their own, so the setup skips it too; it is the person's to add. The steps are the template's
+ * (its `DEPLOYMENT.md`, "GitHub Actions secrets"), which follow Claude Code's own "Claude Code
+ * GitHub Actions" guide (manual setup) and its "Authentication" page (`claude setup-token`).
+ * `DOPPLER_TOKEN`: the template's own step (`scripts/setup.mjs doppler-create-ci-token`, its
+ * `/deploy-to-dev` Step 2.6a); the setup session runs it as part of the deploy, so after a
  * deploy with Doppler this secret is set.
  */
 export const SECURE_FOUNDATION_KNOWN_REPO_SECRETS: Record<string, KnownRepoSecret> = {
   CLAUDE_CODE_OAUTH_TOKEN: {
-    purpose: `The sign-in of the template's Claude review workflows (the \`anthropics/claude-code-action\` action). They run on GitHub's servers, not on this computer, so they need a token for your own Claude subscription stored in the repository. The template's install doesn't set it. Reviews you run inside ${HARDEN_PRODUCT_NAME} use your own subscription on this computer and don't need it.`,
+    purpose: `The sign-in of the template's Claude review workflows (the \`anthropics/claude-code-action\` action). They run on GitHub's servers, not on this computer, so they need a token for your own Claude subscription stored in the repository. The template's deploy skips it by default. Reviews you run inside ${HARDEN_PRODUCT_NAME} use your own subscription on this computer and don't need it.`,
     without:
-      "Without it the template's Claude review checks have no sign-in and fail shortly after they start, each time they run (the review on every pull request), unless the workflow itself skips them.",
+      "Without it the template's Claude review jobs don't review anything: the template's workflows skip them (a skipped review means no review ran), and copies of the workflows from before that change have no sign-in and fail shortly after they start, each time they run.",
     steps: ({ repository }) => [
-      "In your own terminal, run `claude setup-token` (a command of Claude Code; it needs a Claude subscription). It prints a token that is valid for one year and saves it nowhere: copy it.",
+      "In a regular terminal window of your own, not inside a Claude Code session (the command needs an interactive terminal, and a session would keep the token in its transcript), run `claude setup-token` (a command of Claude Code; it needs a Claude subscription). Approve the sign-in in your browser. It prints a token that is valid for one year and saves it nowhere: copy it.",
       addSecret("CLAUDE_CODE_OAUTH_TOKEN", repository),
       "Install the Claude GitHub App on the repository if it isn't there yet: https://github.com/apps/claude. Claude Code's guide has it as the first step of a manual setup.",
       CHECK_AGAIN,
@@ -311,8 +311,8 @@ export const SECURE_FOUNDATION_KNOWN_REPO_SECRETS: Record<string, KnownRepoSecre
     source: () =>
       HARDEN_TEMPLATE_REPOSITORY
         ? {
-            title: "The template's install guide (Doppler post-init)",
-            url: `https://github.com/${HARDEN_TEMPLATE_REPOSITORY}/blob/${HARDEN_TEMPLATE_BRANCH}/.claude/commands/install.md`,
+            title: "The template's dev deploy (Step 2.6a)",
+            url: `https://github.com/${HARDEN_TEMPLATE_REPOSITORY}/blob/${HARDEN_TEMPLATE_BRANCH}/.claude/commands/deploy-to-dev.md`,
           }
         : null,
   },

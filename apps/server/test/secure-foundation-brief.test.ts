@@ -51,7 +51,7 @@ const run = (command: string) => {
  * The steps of the template's two commands, in their order, as the brief names them: the
  * sections of `.claude/commands/install.md` (Phase 1 to Phase 6, with the module install and
  * the Doppler bootstrap and post-init between them) and of `.claude/commands/deploy-to-dev.md`
- * (Step 0 to Step 8), read from the template at the commit the setup installs.
+ * (Step 0 to Step 8, with Step 2.6), read from the template at the commit the setup installs.
  */
 const INSTALL_STEPS = [
   "**Phase 1**",
@@ -72,6 +72,7 @@ const DEPLOY_STEPS = [
   "**Step 1.5**",
   "**Step 2**",
   "**Step 2.5**",
+  "**Step 2.6**",
   "**Step 3**",
   "**Step 4**",
   "**Step 5**",
@@ -167,12 +168,14 @@ describe("the setup brief", () => {
       "convex-setup",
       "configure",
       "doppler-sync-env-local",
+      "doppler-create-ci-token",
     ]);
     expect(ran[0]?.installed).toEqual(["blog", "pricing"]);
     expect(ran[1]?.args).toEqual({ "project-name": "My Site" });
-    // The step is named, marked as a difference with its reason, and handed on as the file's fallback.
+    // The file runs the CI token step and expects it to defer while there is no repository;
+    // without the deploy there never is one, so it is handed on for later.
     expect(brief).toContain(
-      `${DIFFERS} don't run its second command, \`doppler-create-ci-token\`: it stores the token as a secret of the project's GitHub repository, and this project has none`,
+      "The project has no GitHub repository yet, so the second answers `deferred: true` and creates nothing, which the file expects",
     );
     expect(brief).toContain(
       '"Run node scripts/setup.mjs doppler-create-ci-token once the project has a GitHub repository"',
@@ -213,7 +216,6 @@ describe("the setup brief", () => {
       " the bootstrap would install a missing C",
       " the file has you run these two yourself",
       " the file says to ask its four questions",
-      " its second command, `doppler-create-ci-",
       " don't open the claim URL in a browser a",
       " if it does exist, stop instead of askin",
       " the file's command also passes `--proje",
@@ -290,34 +292,54 @@ describe("the setup brief", () => {
       expect(text).toContain("so the person runs them in their own terminal");
     });
 
-    it("stores the Doppler token right after the repository exists, and records it in the install summary", () => {
+    it("stores the Doppler token in the deploy's Step 2.6a, once the repository exists", () => {
       const text = deployed({ doppler: true });
       const ran = commands(text)
         .map(run)
         .map((r) => r.command);
-      expect(ran.indexOf("doppler-create-ci-token")).toBe(ran.indexOf("github-setup") + 1);
-      expect(ran[ran.indexOf("doppler-create-ci-token") + 1]).toBe("write-install-summary");
+      // Deferred in the install, as the file expects; stored right after the repository exists.
+      expect(ran.indexOf("doppler-create-ci-token")).toBe(
+        ran.indexOf("doppler-sync-env-local") + 1,
+      );
+      expect(ran.lastIndexOf("doppler-create-ci-token")).toBe(ran.indexOf("github-setup") + 1);
+      expect(ran[ran.lastIndexOf("doppler-create-ci-token") + 1]).toBe("vercel-env-dev");
+      expect(text).toContain("The deploy's Step 2.6a stores the token once the repository exists.");
+      expect(text).toContain("`gh secret list -R acme-org/my-site --json name -q '.[].name'`");
       expect(text).toContain("`DOPPLER_TOKEN` on all three Vercel targets");
       expect(text).toContain("`doppler secrets --config dev --only-names`");
-      expect(commands(setupBrief(input({ doppler: true }))).join()).not.toContain("ci-token");
+      expect(deployed()).toContain("**2.6a** (`DOPPLER_TOKEN`): not in this mode");
+    });
+
+    it("answers the Claude token question of Step 2.6b with the file's default, Skip for now", () => {
+      for (const text of [deployed(), deployed({ doppler: true })]) {
+        expect(text).toContain(
+          'its question is answered "Skip for now", the file\'s recommended choice',
+        );
+        expect(text).toContain("never run `claude setup-token`, and never store this secret");
+        expect(text).toContain('(the file\'s "Push my existing token")');
+        expect(text).not.toContain("! claude");
+        expect(text).toContain("something this brief doesn't answer, stop");
+      }
     });
 
     it("leaves the repository secrets the workflows use to the person, and says where they are listed", () => {
       const withDoppler = deployed({ doppler: true });
       expect(withDoppler).toContain(
-        "The only repository secret you store is `DOPPLER_TOKEN`, by the template's own step",
+        "The only repository secret you store is `DOPPLER_TOKEN`, by the template's own Step 2.6a",
       );
       expect(withDoppler).toContain("never ask the person for a value");
       expect(deployed()).toContain("Store no repository secret: set no other secret or variable");
       for (const text of [deployed(), withDoppler]) {
         expect(text).toContain(
-          "so they need the repository secret `CLAUDE_CODE_OAUTH_TOKEN`: a token for your own Claude subscription, which you create with `claude setup-token`",
+          "so they need the repository secret `CLAUDE_CODE_OAUTH_TOKEN`: a token for your own Claude subscription.",
         );
+        expect(text).toContain("The template's deploy skips it by default, and so did this setup");
         expect(text).toContain(
-          "The template's install doesn't set it, and neither did this setup.",
+          "open a regular terminal window (not a Claude Code session, which would keep the token in its transcript), run `claude setup-token`",
         );
+        expect(text).toContain("`gh secret set CLAUDE_CODE_OAUTH_TOKEN -R acme-org/my-site`");
         expect(text).toContain(
-          "the two review checks of `claude-code-review.yml` fail on every pull request",
+          "the template's Claude review jobs are skipped on every pull request: a skipped review means no review ran",
         );
         expect(text).toMatch(/Reviews you run inside \S+ use your own subscription/);
         expect(text).toContain(
@@ -362,7 +384,7 @@ describe("the setup brief", () => {
     );
     // Without a repository, the CI token step goes to both as the template's own fallback.
     expect(brief).toContain(
-      'Put the file\'s own fallback in `--manual-steps` and under "left for later": "Run node scripts/setup.mjs doppler-create-ci-token once the project has a GitHub repository"',
+      'put this in `--manual-steps` and under "left for later": "Run node scripts/setup.mjs doppler-create-ci-token once the project has a GitHub repository"',
     );
     expect(brief).toContain('under the heading "What was created"');
     expect(brief).toContain("removes none of them");
