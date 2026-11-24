@@ -151,7 +151,9 @@ describe("what the person is told about a name", () => {
     // The template's GitHub-side reviews need it; the app and its reviews on this computer don't.
     expect(item.purpose).toContain("The sign-in of the template's Claude review workflows");
     expect(item.purpose).toContain("They run on GitHub's servers, not on this computer");
-    expect(item.purpose).toContain("The template's install doesn't set it.");
+    expect(item.purpose).toContain(
+      "The setup doesn't add it: creating it needs your own Claude sign-in, and the token would have passed through the setup session's transcript.",
+    );
     expect(item.purpose).toMatch(
       /Reviews you run inside \S+ use your own subscription on this computer and don't need it\./,
     );

@@ -1,9 +1,19 @@
 import { execFileSync } from "node:child_process";
 import { secureFoundationCreates } from "@codeden/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { DIFFERS, type SetupBriefInput, setupBrief } from "../src/services/secure-foundation/brief";
+import {
+  DIFFERS,
+  deployFileShape,
+  type SetupBriefInput,
+  setupBrief,
+} from "../src/services/secure-foundation/brief";
 import { removeTree } from "./support/remove-tree";
-import { makeTemplateFixture, type TemplateFixture } from "./support/secure-foundation-fixture";
+import {
+  DEPLOY_FILE_WITH_SECRETS_STEP,
+  DEPLOY_FILE_WITHOUT_SECRETS_STEP,
+  makeTemplateFixture,
+  type TemplateFixture,
+} from "./support/secure-foundation-fixture";
 
 /**
  * The setup session's brief: its two forms, and that the commands it spells out are ones the
@@ -21,8 +31,12 @@ const input = (over: Partial<SetupBriefInput> = {}): SetupBriefInput => ({
   convexTeam: null,
   deploy: null,
   creates: secureFoundationCreates({ name: "My Site", secrets: "env_local" }),
+  deployFile: deployFileShape(DEPLOY_FILE_WITHOUT_SECRETS_STEP),
   ...over,
 });
+
+/** The template's `/deploy-to-dev` with its own step for the repository's Actions secrets. */
+const withSecretsStep = { deployFile: deployFileShape(DEPLOY_FILE_WITH_SECRETS_STEP) };
 
 /** Split a command line on spaces outside double quotes, dropping the quotes. */
 const words = (line: string) =>
@@ -213,7 +227,7 @@ describe("the setup brief", () => {
       " the bootstrap would install a missing C",
       " the file has you run these two yourself",
       " the file says to ask its four questions",
-      " its second command, `doppler-create-ci-",
+      " don't run its second command, `doppler-",
       " don't open the claim URL in a browser a",
       " if it does exist, stop instead of askin",
       " the file's command also passes `--proje",
@@ -221,6 +235,12 @@ describe("the setup brief", () => {
     ]);
     // Each says what is done instead and why, not just that it differs.
     for (const difference of all) expect(difference.length).toBeGreaterThan(80);
+    // A template whose deploy asks for the Claude token: one more, in its secrets step.
+    const newer = differences(deployed({ doppler: true, ...withSecretsStep }));
+    expect(newer.map((d) => d.slice(0, 40))).toEqual([
+      ...all.map((d) => d.slice(0, 40)),
+      " don't ask the person, don't run `claude",
+    ]);
     // Without Doppler the deploy's Step 1 differs only in printing no value.
     expect(
       differences(deployed()).find(
@@ -309,23 +329,131 @@ describe("the setup brief", () => {
       );
       expect(withDoppler).toContain("never ask the person for a value");
       expect(deployed()).toContain("Store no repository secret: set no other secret or variable");
-      for (const text of [deployed(), withDoppler]) {
+      for (const text of [
+        deployed(),
+        withDoppler,
+        deployed(withSecretsStep),
+        deployed({ doppler: true, ...withSecretsStep }),
+      ]) {
         expect(text).toContain(
-          "so they need the repository secret `CLAUDE_CODE_OAUTH_TOKEN`: a token for your own Claude subscription, which you create with `claude setup-token`",
+          "so they need the repository secret `CLAUDE_CODE_OAUTH_TOKEN`: a token for your own Claude subscription. This setup didn't add it: creating it needs your own Claude sign-in, and the token would have passed through this session's transcript.",
         );
         expect(text).toContain(
-          "The template's install doesn't set it, and neither did this setup.",
+          "1. Run `claude setup-token` and copy the token it prints (valid for one year; it is saved nowhere).",
         );
         expect(text).toContain(
-          "the two review checks of `claude-code-review.yml` fail on every pull request",
+          "2. Run `gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo acme-org/my-site` and paste the token when it asks (it isn't shown as you type).",
+        );
+        expect(text).toContain("https://github.com/apps/claude");
+        expect(text).toContain(
+          "choose as its owner a GitHub organisation that already shares `CLAUDE_CODE_OAUTH_TOKEN` with its repositories. If acme-org is one, there is nothing to do",
+        );
+        expect(text).toContain(
+          '"`CLAUDE_CODE_OAUTH_TOKEN` is already set in acme-org/my-site: the template\'s Claude reviews can run."',
         );
         expect(text).toMatch(/Reviews you run inside \S+ use your own subscription/);
         expect(text).toContain(
           "the project page's Secure Foundation setup card lists every one acme-org/my-site doesn't have, with the steps for each.",
         );
+        // The session only reads the names, never sets the token, and goes on.
+        expect(text).toContain(
+          "run `gh secret list --repo acme-org/my-site --json name` (it lists names only, never a value; read-only)",
+        );
+        expect(text).toContain(
+          "Then go straight on to the next step: nothing waits for this secret",
+        );
+        expect(text).toContain("never run `claude setup-token`");
+        expect(text).not.toMatch(/sk-ant|printf|\$CLAUDE_CODE_OAUTH_TOKEN|<<|`!/);
+        // One command that sets a secret: the person's own step in the final message.
+        expect(text.match(/`gh secret set [^`]+`/g)).toEqual([
+          "`gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo acme-org/my-site`",
+        ]);
       }
       // A project that stays local has no repository to hold a secret: nothing is said of it.
       expect(setupBrief(input())).not.toContain("repository secret");
+      expect(setupBrief(input(withSecretsStep))).not.toContain("CLAUDE_CODE_OAUTH_TOKEN");
+    });
+
+    it("checks the Claude token right after the owner is verified, without the template's step and with it", () => {
+      const before = deployed();
+      expect(before).toContain(
+        "- **Repository secrets** (added by CodeHarden, right after the owner is verified): run `gh secret list",
+      );
+      expect(before).not.toContain("The file's GitHub Actions secrets step");
+      const after = deployed(withSecretsStep);
+      expect(after).toContain(
+        "- **The file's GitHub Actions secrets step** (right after the owner",
+      );
+      expect(after).toContain(
+        `Its \`CLAUDE_CODE_OAUTH_TOKEN\` part: ${DIFFERS} don't ask the person, don't run \`claude setup-token\``,
+      );
+      expect(after).toContain(
+        "generating or pasting it here would put it into this session's transcript",
+      );
+      expect(after).toContain('take the file\'s "Skip for now" path');
+      expect(after).toContain(
+        "(apart from the `CLAUDE_CODE_OAUTH_TOKEN` question, answered above)",
+      );
+      expect(before).not.toContain("question, answered above");
+      for (const text of [before, after]) {
+        const at = positions(text, ["**Step 2.5**", "gh secret list --repo", "**Step 3**"]);
+        expect(at).toEqual([...at].sort((a, b) => a - b));
+      }
+    });
+
+    it("follows the deploy file's version: it creates the Doppler token exactly once and pushes when the file does", () => {
+      const ciToken = (text: string) =>
+        commands(text)
+          .map(run)
+          .filter((r) => r.command === "doppler-create-ci-token").length;
+      const before = deployed({ doppler: true });
+      const after = deployed({ doppler: true, ...withSecretsStep });
+      expect(ciToken(before)).toBe(1);
+      expect(ciToken(after)).toBe(1);
+      // Before: the brief runs it right after the repository exists and records it in the install summary.
+      expect(before).toContain("moved here from Part 2");
+      expect(after).not.toContain("moved here from Part 2");
+      expect(after).not.toContain("`node scripts/setup.mjs write-install-summary` again");
+      // After: the file's own secrets step runs it; Part 2 still doesn't.
+      expect(after).toContain(
+        "Its `DOPPLER_TOKEN` part: as the file says (it runs `node scripts/setup.mjs doppler-create-ci-token` when the secret isn't listed; Part 2 didn't run it)",
+      );
+      expect(after).toContain(
+        "The deploy's own secrets step runs it in Part 3, once the repository exists.",
+      );
+      expect(deployed(withSecretsStep)).toContain(
+        "Its `DOPPLER_TOKEN` part: skip it, as the file says when `.doppler.yaml` doesn't exist.",
+      );
+      expect(commands(deployed(withSecretsStep)).join()).not.toContain("ci-token");
+      // The repository is created without a push where the file says so, and pushed in Step 4.
+      const setup = (text: string) =>
+        commands(text)
+          .map(run)
+          .find((r) => r.command === "github-setup")?.args;
+      expect(setup(after)).toEqual({
+        "repo-name": "my-site",
+        owner: "acme-org",
+        "no-push": "true",
+      });
+      expect(setup(before)).toEqual({ "repo-name": "my-site", owner: "acme-org" });
+      expect(after).toContain("then always `git push -u origin main`, the repository's first push");
+    });
+
+    it("reads the deploy file's version from what it runs, not from its step numbers", () => {
+      expect(deployFileShape(DEPLOY_FILE_WITHOUT_SECRETS_STEP)).toEqual({
+        storesDopplerToken: false,
+        asksClaudeToken: false,
+        noPush: false,
+      });
+      expect(deployFileShape(DEPLOY_FILE_WITH_SECRETS_STEP)).toEqual({
+        storesDopplerToken: true,
+        asksClaudeToken: true,
+        noPush: true,
+      });
+      expect(deployFileShape(DEPLOY_FILE_WITH_SECRETS_STEP.replaceAll("2.6", "3.1"))).toEqual(
+        deployFileShape(DEPLOY_FILE_WITH_SECRETS_STEP),
+      );
+      expect(deployFileShape(null)).toEqual(deployFileShape(DEPLOY_FILE_WITHOUT_SECRETS_STEP));
     });
 
     it("reads the deploy file where the provider doesn't run command files", () => {
