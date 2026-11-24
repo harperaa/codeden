@@ -1,4 +1,8 @@
-import type { SecureFoundationOptions, Snapshot } from "@codeden/contracts";
+import {
+  type SecureFoundationOptions,
+  type Snapshot,
+  secureFoundationRequirementsSummary,
+} from "@codeden/contracts";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -19,10 +23,12 @@ import {
   secureFoundationDocsUrl,
 } from "./copy";
 import { type FormAnswers, FormStep } from "./form-step";
+import { RequirementsStep } from "./requirements-step";
 import { useGo } from "./use-go";
 import {
   secureFoundationKey,
   useSecureFoundationPrefill,
+  useSecureFoundationRequirements,
   useSecureFoundationTemplate,
 } from "./use-secure-foundation";
 import { VerifyStep } from "./verify-step";
@@ -78,6 +84,30 @@ export function SecureFoundationDialog({
       void navigate({ to: "/sessions/$sessionId", params: { sessionId } });
     },
   });
+  // The requirements page: in front of the form when a check found something every setup needs
+  // missing ("gate"), or opened by the person ("review"). Null: the form or the verification view.
+  const requirements = useSecureFoundationRequirements(true);
+  const [page, setPage] = useState<"gate" | "review" | null>(null);
+  /** The person went on past the gate: a later check doesn't bring it back by itself. */
+  const [passed, setPassed] = useState(false);
+  const summary = requirements.data ? secureFoundationRequirementsSummary(requirements.data) : null;
+  const attention = summary?.attention ?? false;
+  const checked = requirements.dataUpdatedAt;
+  const idle = view === "form" && go.busy === null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: decided once per finished check
+  useEffect(() => {
+    if (!checked) return;
+    setPage((now) => {
+      if (now === "review") return now;
+      if (!attention) return null;
+      return now === "gate" || (!passed && idle) ? "gate" : now;
+    });
+  }, [checked, attention]);
+  const leaveRequirements = () => {
+    if (page === "gate") setPassed(true);
+    setPage(null);
+  };
+
   const press = (from: "form" | "view") => {
     void go.go(from).then((created) => {
       if (created) return;
@@ -104,9 +134,33 @@ export function SecureFoundationDialog({
             >
               What this does
             </a>
+            {page === null && go.busy === null && (
+              <>
+                {" · "}
+                <button
+                  type="button"
+                  className="underline underline-offset-2 hover:text-foreground"
+                  onClick={() => setPage("review")}
+                  data-testid="secure-foundation-requirements-link"
+                >
+                  Requirements
+                </button>
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
-        {view === "form" ? (
+        {page !== null ? (
+          <RequirementsStep
+            result={requirements.data}
+            checking={requirements.isFetching}
+            error={requirements.error?.message ?? null}
+            blocking={summary?.blocking ?? false}
+            review={page === "review"}
+            onCheck={() => void requirements.refetch()}
+            onContinue={leaveRequirements}
+            onCancel={onClose}
+          />
+        ) : view === "form" ? (
           <FormStep
             options={options}
             template={template.data}

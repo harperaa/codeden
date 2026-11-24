@@ -11,6 +11,7 @@ import {
   type SecureFoundationPrefill,
   type SecureFoundationQuiet,
   type SecureFoundationRepoSecrets,
+  type SecureFoundationRequirements,
   SecureFoundationService,
   type SecureFoundationTemplate,
   VerifySecureFoundationRequest,
@@ -29,6 +30,8 @@ import { jsonBody, queryOf } from "./validate";
  * as every other route. What is personal (the suggested email, the Clerk claim link) is only
  * answered on this computer: another device gets nulls, never an error. The Connections routes
  * (sign-in state, starting and cancelling a login) are refused to another device altogether.
+ * `/requirements` checks the tools and sign-ins every setup needs, before the form is filled in:
+ * found or not, a version number and signed in or not, nothing else; refused to another device.
  * `/verify` is what "Go" checks first (fields, folder, template commit, provider); the sign-in
  * checks are not part of it and stay the Connections routes. `/projects/:id/quiet` says whether
  * automatic work is still off in a project Secure Foundation set up (false for any other id).
@@ -59,6 +62,13 @@ export function secureFoundationRoutes(s: AppServices) {
       return c.json<SecureFoundationConnections>({
         connections: await sf.connectionStates(c.req.valid("query").services),
       });
+    })
+    .get("/requirements", async (c) => {
+      requireLocal(
+        c,
+        "What Secure Foundation needs can only be checked on the computer running the app.",
+      );
+      return c.json<SecureFoundationRequirements>(await sf.requirements());
     })
     .post("/connections/:service/login", async (c) => {
       requireLocal(c);

@@ -91,6 +91,35 @@ describe("what is personal is answered on this computer only", () => {
   });
 });
 
+describe("what Secure Foundation requires of this computer", () => {
+  it("is checked on this computer, and refused to another device before anything runs", async () => {
+    let checks = 0;
+    const requirements = {
+      checkedAt: "2026-01-05T10:00:00.000Z",
+      platform: "darwin",
+      tools: [],
+    };
+    const routes = new Hono()
+      .onError((e, c) => errorResponse(e, c))
+      .route(
+        "/",
+        secureFoundationRoutes({
+          secureFoundation: {
+            requirements: async () => {
+              checks += 1;
+              return requirements;
+            },
+          },
+        } as unknown as AppServices),
+      );
+    const local = await routes.request("/requirements", {}, from("127.0.0.1"));
+    expect(await local.json()).toEqual(requirements);
+    const remote = await routes.request("/requirements", {}, from("192.168.1.20"));
+    expect(remote.status).toBe(403);
+    expect(checks).toBe(1);
+  });
+});
+
 describe("the values for the dev preview's settings form", () => {
   it("are given on this computer and not to another device", async () => {
     const local = SecureFoundationDevPreview.parse(

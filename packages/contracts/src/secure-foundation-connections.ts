@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { Id } from "./common";
-import type { SecureFoundationSecrets } from "./secure-foundation";
 
 /**
  * The sign-in checks of the Secure Foundation form (the service rows of its verification view): for each service the chosen options
@@ -9,8 +8,12 @@ import type { SecureFoundationSecrets } from "./secure-foundation";
  * no token: each CLI keeps its own sign-in, and "signed in" is what the CLI answers.
  */
 
-/** A service the install signs in to with its own CLI. */
-export const SecureFoundationService = z.enum(["convex", "doppler", "github", "vercel"]);
+/**
+ * A service whose own CLI holds a sign-in on this computer. The install signs in to the first
+ * four; `clerk` is asked by the requirements page only (the install creates its Clerk app
+ * without an account), so it is never one of `secureFoundationServices`.
+ */
+export const SecureFoundationService = z.enum(["convex", "doppler", "github", "vercel", "clerk"]);
 export type SecureFoundationService = z.infer<typeof SecureFoundationService>;
 
 /**
@@ -20,23 +23,12 @@ export type SecureFoundationService = z.infer<typeof SecureFoundationService>;
 export const SECURE_FOUNDATION_NPX_PACKAGES = {
   convex: "convex@1.43.0",
   vercel: "vercel@66.6.0",
+  // Clerk's official CLI; this version has `whoami --json`.
+  clerk: "clerk@4.4.0",
 } as const;
 
 /** The GitHub permissions the template's deploy route checks for. */
 export const SECURE_FOUNDATION_GITHUB_SCOPES = ["repo", "workflow", "read:org"] as const;
-
-/** The services a form's answers need, in the order the step shows them. */
-export function secureFoundationServices(answers: {
-  secrets: SecureFoundationSecrets;
-  /** The deploy option is ticked. */
-  deploy?: boolean;
-}): SecureFoundationService[] {
-  return [
-    "convex",
-    ...(answers.secrets === "doppler" ? (["doppler"] as const) : []),
-    ...(answers.deploy ? (["github", "vercel"] as const) : []),
-  ];
-}
 
 /** A Convex team slug, as `--team` takes it. */
 export const ConvexTeamSlug = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/);

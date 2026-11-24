@@ -125,6 +125,13 @@ export function SettingsPage({ section }: { section: string }) {
             </option>
           ))}
         </select>
+        {/* The side nav's fork entry, which the picker's sections don't include. */}
+        <Link
+          to="/secure-foundation-setup"
+          className="mt-2 flex h-10 items-center gap-2.5 px-1 text-[13px] text-muted-foreground"
+        >
+          <ShieldCheck className="size-4" /> Secure Foundation Setup
+        </Link>
       </div>
       <div className="flex min-h-0 flex-1">
         <nav className="hidden w-56 shrink-0 space-y-0.5 border-r border-border p-3 md:block">
@@ -154,6 +161,12 @@ export function SettingsPage({ section }: { section: string }) {
             className="flex h-8 items-center gap-2.5 rounded-md px-2.5 text-[13px] text-muted-foreground hover:bg-accent/60 hover:text-foreground"
           >
             <Sparkles className="size-4" /> First-run setup
+          </Link>
+          <Link
+            to="/secure-foundation-setup"
+            className="flex h-8 items-center gap-2.5 rounded-md px-2.5 text-[13px] text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+          >
+            <ShieldCheck className="size-4" /> Secure Foundation Setup
           </Link>
         </nav>
         <div className="min-h-0 flex-1 overflow-y-auto scroll-thin">

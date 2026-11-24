@@ -64,6 +64,7 @@ const LABEL: Record<CheckId, string> = {
   doppler: "Doppler",
   github: "GitHub",
   vercel: "Vercel",
+  clerk: "Clerk",
   deploy: "Deploy",
   answers: "Your answers",
   create: "Creating the project",

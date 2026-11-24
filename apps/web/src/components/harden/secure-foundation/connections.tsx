@@ -6,15 +6,16 @@ import {
   type SecureFoundationService,
 } from "@codeden/contracts";
 import { ExternalLink, Loader2 } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { useClient } from "@/lib/api";
+import { useServiceLogin } from "./use-login";
 
 const LABEL: Record<SecureFoundationService, string> = {
   convex: "Convex",
   doppler: "Doppler",
   github: "GitHub",
   vercel: "Vercel",
+  clerk: "Clerk",
 };
 
 /**
@@ -41,46 +42,8 @@ export function ConnectionRow({
   /** A login ended: the checks are worth running again. */
   onChanged: () => void;
 }) {
-  const client = useClient();
   const { service } = connection;
-  const [login, setLogin] = useState<SecureFoundationLogin | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const running = login !== null && isLoginRunning(login);
-  const loginId = login?.id;
-  // Poll while the login runs. The link and the code stay in this component: no store, no cache.
-  useEffect(() => {
-    if (!loginId || !running) return;
-    const timer = setInterval(() => {
-      void client.secureFoundation.login(loginId).then(
-        (next) => {
-          setLogin(next);
-          if (!isLoginRunning(next)) onChanged();
-        },
-        () => setLogin(null),
-      );
-    }, 1500);
-    return () => clearInterval(timer);
-  }, [client, loginId, running, onChanged]);
-  // Leaving the view stops a login that is still waiting.
-  const latest = useRef(login);
-  latest.current = login;
-  useEffect(
-    () => () => {
-      const open = latest.current;
-      if (open && isLoginRunning(open))
-        void client.secureFoundation.cancelLogin(open.id).catch(() => {});
-    },
-    [client],
-  );
-
-  const start = () => {
-    setError(null);
-    client.secureFoundation.startLogin(service).then(setLogin, (e: Error) => setError(e.message));
-  };
-  const cancel = () => {
-    if (login)
-      void client.secureFoundation.cancelLogin(login.id).then(setLogin, () => setLogin(null));
-  };
+  const { login, error, running, start, cancel } = useServiceLogin(service, onChanged);
   return (
     <li
       className="rounded-lg border border-border p-2.5"
@@ -113,33 +76,7 @@ export function ConnectionRow({
           <code className="rounded bg-accent px-1 py-0.5">{connection.install}</code>
         </p>
       )}
-      {login && login.status !== "done" && (
-        <div className="mt-1.5 space-y-1 text-2xs" role="status">
-          <p className="flex items-center gap-1.5 text-muted-foreground">
-            {running && <Loader2 className="size-3 animate-spin" />}
-            {login.message}
-          </p>
-          {login.url && (
-            <p>
-              <a
-                href={login.url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 font-medium underline underline-offset-2"
-              >
-                Open the {LABEL[service]} sign-in page <ExternalLink className="size-3" />
-              </a>
-              {login.code && (
-                <>
-                  {" "}
-                  The page should show the code{" "}
-                  <code className="rounded bg-accent px-1 py-0.5">{login.code}</code>
-                </>
-              )}
-            </p>
-          )}
-        </div>
-      )}
+      <LoginProgress label={LABEL[service]} login={login} />
       {fix && !running && <p className="mt-1.5 text-2xs">{fix}</p>}
       {error && (
         <p className="mt-1.5 text-2xs text-destructive" role="alert">
@@ -147,6 +84,44 @@ export function ConnectionRow({
         </p>
       )}
     </li>
+  );
+}
+
+/** A login while it runs or after it failed: what it says, and its link and code. */
+export function LoginProgress({
+  label,
+  login,
+}: {
+  label: string;
+  login: SecureFoundationLogin | null;
+}) {
+  if (!login || login.status === "done") return null;
+  return (
+    <div className="mt-1.5 space-y-1 text-2xs" role="status">
+      <p className="flex items-center gap-1.5 text-muted-foreground">
+        {isLoginRunning(login) && <Loader2 className="size-3 animate-spin" />}
+        {login.message}
+      </p>
+      {login.url && (
+        <p>
+          <a
+            href={login.url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 font-medium underline underline-offset-2"
+          >
+            Open the {label} sign-in page <ExternalLink className="size-3" />
+          </a>
+          {login.code && (
+            <>
+              {" "}
+              The page should show the code{" "}
+              <code className="rounded bg-accent px-1 py-0.5">{login.code}</code>
+            </>
+          )}
+        </p>
+      )}
+    </div>
   );
 }
 

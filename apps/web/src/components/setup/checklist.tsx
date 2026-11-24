@@ -50,7 +50,7 @@ const fixLabel: Record<NonNullable<SetupCheck["fix"]>["kind"], string> = {
   configure: "Set up",
 };
 
-function StateIcon({ state }: { state: RowState }) {
+export function StateIcon({ state }: { state: RowState }) {
   const base =
     "flex size-6 shrink-0 items-center justify-center rounded-full transition-all duration-300";
   if (state === "checking")

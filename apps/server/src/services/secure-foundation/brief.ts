@@ -2,6 +2,7 @@ import {
   HARDEN_PRODUCT_NAME,
   SECURE_FOUNDATION_PROGRESS as MARK,
   SECURE_FOUNDATION_PROGRESS_PREFIX as PREFIX,
+  SECURE_FOUNDATION_MIN_NODE_MAJOR,
   type SecureFoundationCreated,
   type SecureFoundationDeploy,
   secureFoundationDopplerProject,
@@ -131,7 +132,9 @@ function preflightPart(input: SetupBriefInput, repo: string): string[] {
   return [
     "## Part 1: checks and sign-ins (the only part that may involve the person)",
     `Report "${PREFIX}${MARK.preflight}". ${DIFFERS} the template's steps start their sign-ins part-way through (Doppler's in the install's Doppler bootstrap, Convex's in its Phase 4${deploy ? ", GitHub's in the deploy's Step 1.5" : ""}). Each needs the person's own browser or terminal, so they are checked here, before anything is created, and the rest runs without the person. Then, in order:`,
-    "1. The install's Phase 1, step 1: `node -v` is 18 or newer; `npm -v` and `git --version` work too. If `node` or `npm` is not found at all, this session's PATH has no Node.js (it happens when the app was started from the Dock and Node.js comes from a version manager): don't try to install Node.js or to guess its folder. Stop as described below, and tell the person to quit the app, start it from a terminal where `node -v` works, and send \"continue\" here.",
+    // The version is the requirements list's, which the requirements page shows too.
+    `1. The install's Phase 1, step 1: \`node -v\` is ${SECURE_FOUNDATION_MIN_NODE_MAJOR} or newer; ` +
+      "`npm -v` and `git --version` work too. If `node` or `npm` is not found at all, this session's PATH has no Node.js (it happens when the app was started from the Dock and Node.js comes from a version manager): don't try to install Node.js or to guess its folder. Stop as described below, and tell the person to quit the app, start it from a terminal where `node -v` works, and send \"continue\" here.",
     "2. The install's Phase 1, step 2: if `node_modules/.package-lock.json` is missing, run `npm install`.",
     '3. Convex sign-in (the install\'s Phase 4, case `needsLogin`; the person was offered it in the form, so this is usually a check): run `npx convex login status`. If it doesn\'t say "Status: Logged in", run the file\'s own command `npx convex login --login-flow poll --no-open --device-name "claude-setup"` in the background with a five-minute limit (300000 ms), read the URL it prints, and give that URL to the person with `ask_user` ("Open this link to sign in to Convex, then answer Done"). Wait for the command to finish. If it fails or times out, ask the file\'s question: "Convex login didn\'t complete. Would you like to try again, or log in manually?" with the options "Try again" and "I\'ll run `npx convex login` in my terminal"; for the second, wait until the person answers that they are done. If it still isn\'t signed in, stop.',
     input.convexTeam

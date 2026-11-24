@@ -25,6 +25,7 @@ import {
   type SecureFoundationPrefill,
   type SecureFoundationProvider,
   type SecureFoundationRepositoryMode,
+  type SecureFoundationRequirements,
   type SecureFoundationService as SecureFoundationServiceName,
   type SecureFoundationTemplate,
   type SetupStatus,
@@ -42,6 +43,7 @@ import { ConnectionsService } from "./connections/connections-service";
 import { claimLink, deployedLink, isOwnFolder, removeCreated } from "./folders";
 import { GH_TIMEOUT_MS } from "./repo-secrets/github";
 import { RepoSecretsService } from "./repo-secrets/repo-secrets-service";
+import { checkRequirements } from "./requirements";
 import { devPreviewOffer, type SecureFoundationSetups } from "./setups";
 import {
   fetchTemplate,
@@ -153,6 +155,11 @@ export class SecureFoundationService {
         ? { ...state, lastOwner: last }
         : state,
     );
+  }
+
+  /** What Secure Foundation requires of this computer, checked now (`requirements.ts`). */
+  requirements(): Promise<SecureFoundationRequirements> {
+    return checkRequirements(this.connections);
   }
 
   async options(): Promise<SecureFoundationOptions> {

@@ -48,6 +48,26 @@ Go also stops once, without anything being wrong, to show you a choice it made f
 
 If the create itself fails (the session can't start, say), what that attempt wrote is removed and you land in the same view with the server's reason.
 
+## Requirements
+
+When you open Secure Foundation, it first checks that this computer has what every setup needs. If it all is there, you never see this: the form opens. If something is missing, the **requirements page** comes up in front of the form, so you can put it right before anything starts instead of having the setup stop for it. **Settings › Secure Foundation Setup** (the last entry of the Settings sidebar) shows the same lists at any time, every row with its state, and so does the **Requirements** link at the top of the Secure Foundation dialog.
+
+It has two lists, in the format of the first-run setup:
+
+- **Tools on this computer:** Node.js (18 or newer), npm, git, and, marked as needed only for that option, the Doppler CLI (secrets in Doppler) and the GitHub CLI (Deploy). Each row says whether the tool was found and its version. A missing tool shows its install command to copy and run in a terminal yourself (it can ask for your password), and **Install guide** opens the tool's own install page. The Convex, Vercel and Clerk command-line tools run through `npx` at a pinned version, so they need nothing installed beyond Node.js.
+- **Accounts:** Convex, Doppler, GitHub and Vercel show whether this computer is signed in, asked of each service's own command-line tool exactly as [Verify Settings](#verify-settings) asks. Signed out: **Sign in** starts that tool's own login (a link, and the code its page should show), and **Create an account** opens the service's sign-up page. Creating the account is all you need to do on their sites; Secure Foundation does the rest. **Clerk** is for after the install: the install creates an app without an account, and you only need a Clerk account afterwards, to [claim it](#claim-your-clerk-app). Its row is checked like the others, by asking Clerk's own command-line tool (`npx clerk@<pinned version> whoami --json`), and shows a green check when that tool is signed in. When it isn't, the row is not a failure: **Create or Sign-in** starts the tool's login (`clerk auth login`), which opens Clerk's page in your browser, where you can also create the account; the row turns green when it finishes. Three things to know:
+  - Signing in to Clerk in your browser alone does not change the row: it is the command-line tool's sign-in that is asked.
+  - Clerk's tool keeps its sign-in in the system keychain. Where it can't read it, it answers "not signed in" even after you signed in. So **I have an account** marks the row done yourself ("You said you have a Clerk account"), with **Undo**; that yes is kept in this browser only, and nothing about the account is stored.
+  - For a brand-new Clerk account, Clerk's tool creates a first application ("My Application") when it signs in. That is the tool's own behaviour; the app Secure Foundation installs is a separate one.
+
+  Signed in or not, the Clerk row never brings the page up, is not one of Go's checks, and the setup session never uses the Clerk tool. The email the tool prints is read as "signed in" and goes no further.
+
+**Check again** runs the checks again; the page leaves by itself once everything every setup needs is there. It never holds you: **Continue anyway** goes on to the form, because Go and the setup session still make their own checks. Only what every setup needs (Node.js, npm, git, the Convex sign-in) brings the page up by itself. Something that only an option needs is listed and marked, and a check that failed or took too long reads as "couldn't be checked", with **Retry**, never as missing.
+
+The checks run on the computer running CodeHarden only, with fixed commands (`node --version` and the like, and the sign-in checks' own). They answer found or not, a version number and signed in or not: no account name, and no token or password is asked for, shown, logged or kept. From another device the check is refused and the form opens as before.
+
+A limit: the page looks tools up on the path your own shell sets up. A setup session can still find Node.js missing when the app was started from the Dock with a bare path (see below).
+
 ## Verify Settings
 
 **Verify Settings** opens the verification view without starting anything. It runs the same checks and shows each as passed, needing you, or failed:
