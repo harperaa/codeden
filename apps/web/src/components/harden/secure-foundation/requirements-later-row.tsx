@@ -1,7 +1,8 @@
-import type {
-  SecureFoundationAccountRequirement,
-  SecureFoundationService,
-  SecureFoundationToolCheck,
+import {
+  type SecureFoundationAccountRequirement,
+  type SecureFoundationService,
+  type SecureFoundationToolCheck,
+  secureFoundationTool,
 } from "@codeden/contracts";
 import { ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,9 @@ export function LaterAccountRow({
   const { label } = account;
   const after = account.after ?? account.why;
   const signedIn = check.state === "ok";
+  // The command the check ran, so "not signed in" can be compared with what the person ran.
+  const pinned = secureFoundationTool(check.id).npxPackage;
+  const asked = pinned ? `npx ${pinned} whoami` : null;
   // Without npx the tool's login can't be started: the button opens the service's page instead.
   const canStart = check.state !== "missing";
   const message = signedIn
@@ -98,6 +102,14 @@ export function LaterAccountRow({
           Nothing here holds the setup back: the install creates your app without an account.
           Signing in uses {label}'s own command-line tool, which opens {label}'s page in your
           browser; for a new account it can also create a first application there.
+        </p>
+      )}
+      {!signedIn && !said && check.state === "needs_sign_in" && asked && (
+        <p className="mt-1 text-2xs text-muted-foreground" data-testid={`asked-${account.id}`}>
+          What was asked just now: <code className="rounded bg-accent px-1 py-0.5">{asked}</code>,
+          outside any project folder, answered that it is not logged in on this computer. Being
+          signed in to {label} in your browser is not this sign-in, and the same command can pass
+          inside a project folder that holds an app's keys without any account being signed in.
         </p>
       )}
       {!signedIn && !said && <LoginProgress label={label} login={login} />}

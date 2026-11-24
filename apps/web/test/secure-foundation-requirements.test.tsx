@@ -169,6 +169,9 @@ describe("Secure Foundation Setup, from Settings", () => {
     expect(clerk().textContent).toContain(
       "Sign in so your Clerk account is ready to claim your app after the install.",
     );
+    // It says which command answered, so it can be compared with what the person ran themselves.
+    expect(screen.getByTestId("asked-clerk").textContent).toContain("npx clerk@4.4.0 whoami");
+    expect(screen.getByTestId("asked-clerk").textContent).toContain("not logged in");
     const button = screen.getByTestId("create-account-clerk");
     expect(button.textContent?.trim()).toBe("Create or Sign-in");
     fireEvent.click(button);

@@ -83,7 +83,9 @@ describe("Clerk's sign-in, read from `clerk whoami --json`", () => {
     for (const output of [
       "Not logged in. Run `clerk auth login` to authenticate\n",
       "Session expired. Run `clerk auth login` to re-authenticate\n",
-      `${JSON.stringify({ error: { code: "auth_required", message: "…" } })}\n`,
+      // What clerk 4.4.0 really prints without a session, run as the app runs it (no terminal):
+      // exit 1, nothing on stdout, this one line on stderr.
+      '{"error":{"code":"auth_required","message":"Not logged in. Run `clerk auth login` to authenticate"}}\n',
     ]) {
       expect(clerkStatus(ran(output, 1))).toEqual({ signedIn: false, teams: [] });
     }
