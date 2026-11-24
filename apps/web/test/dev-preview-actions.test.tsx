@@ -38,6 +38,7 @@ const view = (over: Partial<DevPreviewProject> = {}): DevPreviewProject => ({
   projectId: PROJECT,
   config: null,
   suggestion: null,
+  recommended: null,
   baseBranch: "main",
   notice: null,
   remote: false,

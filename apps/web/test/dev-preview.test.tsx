@@ -226,6 +226,7 @@ describe("the project's dev preview settings", () => {
     projectId: PROJECT,
     config: null,
     suggestion: { command: "pnpm dev", reason: "package.json has a dev script" },
+    recommended: null,
     baseBranch: "harden",
     notice: null,
     remote: false,
