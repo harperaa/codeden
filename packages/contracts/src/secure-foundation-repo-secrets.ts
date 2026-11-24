@@ -257,7 +257,7 @@ const CHECK_AGAIN =
 
 /** How a repository secret is added by hand, the value typed where only GitHub sees it. */
 function addSecret(name: string, repository: string): string {
-  return `Store it as the repository secret \`${name}\`: on GitHub, open the repository's Settings › Secrets and variables › Actions and press New repository secret. Or run \`gh secret set ${name} --repo ${repository}\` in your own terminal and paste the value when it asks.`;
+  return `Store it as the repository secret \`${name}\`: on GitHub, open the repository's Settings › Secrets and variables › Actions and press New repository secret. Or run \`gh secret set ${name} --repo ${repository}\` in your own terminal and paste the value when it asks (it isn't shown as you type).`;
 }
 
 /**
@@ -265,9 +265,12 @@ function addSecret(name: string, repository: string): string {
  * (`describeRepoSecret`), so a secret the template adds later is still listed. A fork with
  * another template changes this table.
  *
- * `CLAUDE_CODE_OAUTH_TOKEN`: the template's Claude review workflows read it. The template's own
- * install doesn't set it (its `.claude/commands/install.md` and `deploy-to-dev.md` never name
- * it), so the setup doesn't either; it is the person's to add. The steps are Claude Code's own,
+ * `CLAUDE_CODE_OAUTH_TOKEN`: the template's Claude review workflows read it. The setup never
+ * sets it: creating it needs the person's own Claude sign-in, and the token would pass through
+ * the setup session's transcript. Where the template's `/deploy-to-dev` asks for it, the session
+ * only checks the repository's secret names and continues; it is the person's to add, with
+ * these steps, which the session's last message repeats (`claudeTokenMessage` in the server's
+ * setup brief). The steps are Claude Code's own,
  * from its "Claude Code GitHub Actions" guide (manual setup) and its "Authentication" page
  * (`claude setup-token`).
  * `DOPPLER_TOKEN`: the template's own step (`scripts/setup.mjs doppler-create-ci-token`, in its
@@ -276,11 +279,11 @@ function addSecret(name: string, repository: string): string {
  */
 export const SECURE_FOUNDATION_KNOWN_REPO_SECRETS: Record<string, KnownRepoSecret> = {
   CLAUDE_CODE_OAUTH_TOKEN: {
-    purpose: `The sign-in of the template's Claude review workflows (the \`anthropics/claude-code-action\` action). They run on GitHub's servers, not on this computer, so they need a token for your own Claude subscription stored in the repository. The template's install doesn't set it. Reviews you run inside ${HARDEN_PRODUCT_NAME} use your own subscription on this computer and don't need it.`,
+    purpose: `The sign-in of the template's Claude review workflows (the \`anthropics/claude-code-action\` action). They run on GitHub's servers, not on this computer, so they need a token for your own Claude subscription stored in the repository. The setup doesn't add it: creating it needs your own Claude sign-in, and the token would have passed through the setup session's transcript. Reviews you run inside ${HARDEN_PRODUCT_NAME} use your own subscription on this computer and don't need it.`,
     without:
       "Without it the template's Claude review checks have no sign-in and fail shortly after they start, each time they run (the review on every pull request), unless the workflow itself skips them.",
     steps: ({ repository }) => [
-      "In your own terminal, run `claude setup-token` (a command of Claude Code; it needs a Claude subscription). It prints a token that is valid for one year and saves it nowhere: copy it.",
+      "In your own terminal (not in an agent session), run `claude setup-token` (a command of Claude Code; it needs a Claude subscription). It prints a token that is valid for one year and saves it nowhere: copy it.",
       addSecret("CLAUDE_CODE_OAUTH_TOKEN", repository),
       "Install the Claude GitHub App on the repository if it isn't there yet: https://github.com/apps/claude. Claude Code's guide has it as the first step of a manual setup.",
       CHECK_AGAIN,
