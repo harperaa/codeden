@@ -39,3 +39,20 @@ export function useSecureFoundationPrefill(enabled: boolean) {
     enabled,
   });
 }
+
+/**
+ * The tools and sign-ins every setup needs, checked on the computer running the app when the
+ * dialog opens and again on "Check again". Never kept past the dialog.
+ */
+export function useSecureFoundationRequirements(enabled: boolean) {
+  const client = useClient();
+  return useQuery({
+    queryKey: [...secureFoundationKey, "requirements"],
+    queryFn: () => client.secureFoundation.requirements(),
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+    refetchOnWindowFocus: false,
+    enabled,
+  });
+}

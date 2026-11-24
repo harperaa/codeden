@@ -16,8 +16,10 @@ import {
   SecureFoundationPrefill,
   SecureFoundationQuiet,
   SecureFoundationRepoSecrets,
+  SecureFoundationRequirements,
   type SecureFoundationService,
   SecureFoundationTemplate,
+  type SecureFoundationToolCheck,
   type VerifySecureFoundationRequestInit,
   VerifySecureFoundationResponse,
 } from "@codeden/contracts";
@@ -51,6 +53,8 @@ export interface SecureFoundationApi {
   repositorySecrets(projectId: string): Promise<SecureFoundationRepoSecrets>;
   /** The same, read and asked again now (this computer only). */
   checkRepositorySecrets(projectId: string): Promise<SecureFoundationRepoSecrets>;
+  /** The tools and sign-ins every setup needs, checked now (this computer only). */
+  requirements(): Promise<SecureFoundationRequirements>;
   /** Whether this computer is signed in to each service (this computer only). */
   connections(services: SecureFoundationService[]): Promise<SecureFoundationConnections>;
   /** Start a service's own login, or join the one running. */
@@ -93,6 +97,8 @@ export function httpSecureFoundationApi(http: Fetcher): SecureFoundationApi {
         {},
         (v) => SecureFoundationRepoSecrets.parse(v),
       ),
+    requirements: () =>
+      http.get(`${base}/requirements`, (v) => SecureFoundationRequirements.parse(v)),
     connections: (services) =>
       http.get(`${base}/connections?services=${services.join(",")}`, (v) =>
         SecureFoundationConnections.parse(v),
@@ -109,6 +115,21 @@ export function httpSecureFoundationApi(http: Fetcher): SecureFoundationApi {
       ),
   };
 }
+
+/** Made-up data: a computer where everything is installed and signed in. */
+const MOCK_REQUIREMENTS: SecureFoundationRequirements = {
+  checkedAt: "2026-01-05T10:00:00.000Z",
+  platform: "darwin",
+  tools: [
+    { id: "node", version: "22.11.0", signedIn: null, message: "Installed." },
+    { id: "npm", version: "10.9.0", signedIn: null, message: "Installed." },
+    { id: "git", version: "2.47.0", signedIn: null, message: "Installed." },
+    { id: "convex", version: "1.43.0", signedIn: true, message: "Signed in on this computer." },
+    { id: "doppler", version: "3.75.1", signedIn: true, message: "Signed in on this computer." },
+    { id: "gh", version: "2.62.0", signedIn: true, message: "Signed in on this computer." },
+    { id: "vercel", version: "66.6.0", signedIn: true, message: "Signed in on this computer." },
+  ].map((t) => ({ ...t, state: "ok" as const, found: true }) as SecureFoundationToolCheck),
+};
 
 /** The mock client has no template: the option is hidden, as in a build without one. */
 export function mockSecureFoundationApi(): SecureFoundationApi {
@@ -137,6 +158,7 @@ export function mockSecureFoundationApi(): SecureFoundationApi {
     devPreview: async () => SECURE_FOUNDATION_NO_DEV_PREVIEW,
     repositorySecrets: async () => SECURE_FOUNDATION_NO_REPO_SECRETS,
     checkRepositorySecrets: async () => SECURE_FOUNDATION_NO_REPO_SECRETS,
+    requirements: async () => MOCK_REQUIREMENTS,
     connections: async () => ({ connections: [] }),
     startLogin: off,
     login: off,

@@ -155,6 +155,12 @@ export function SettingsPage({ section }: { section: string }) {
           >
             <Sparkles className="size-4" /> First-run setup
           </Link>
+          <Link
+            to="/secure-foundation-setup"
+            className="flex h-8 items-center gap-2.5 rounded-md px-2.5 text-[13px] text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+          >
+            <ShieldCheck className="size-4" /> Secure Foundation Setup
+          </Link>
         </nav>
         <div className="min-h-0 flex-1 overflow-y-auto scroll-thin">
           <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-8 sm:py-8">

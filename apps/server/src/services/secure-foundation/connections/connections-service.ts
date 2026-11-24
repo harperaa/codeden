@@ -152,6 +152,17 @@ export class ConnectionsService {
     });
   }
 
+  /**
+   * The same for several commands at once, each with the same deadline. The person's PATH is
+   * read once for all of them.
+   */
+  async runAll(commands: readonly Command[], timeoutMs: number): Promise<CliResult[]> {
+    const env = await this.env();
+    return Promise.all(
+      commands.map((c) => runCli(c.program, c.args, { cwd: this.cwd(), env, timeoutMs })),
+    );
+  }
+
   /** Start a service's login, or join the one that is starting or running for it. */
   startLogin(service: SecureFoundationService): Promise<SecureFoundationLogin> {
     const starting = this.starting.get(service);

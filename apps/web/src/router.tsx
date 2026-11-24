@@ -53,6 +53,10 @@ const SearchPage = lazyRouteComponent(() => import("@/routes/search"), "SearchPa
 const SessionPage = lazyRouteComponent(() => import("@/routes/session"), "SessionPage");
 const SettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "SettingsPage");
 const SetupPage = lazyRouteComponent(() => import("@/routes/setup"), "SetupPage");
+const SecureFoundationSetupPage = lazyRouteComponent(
+  () => import("@/routes/secure-foundation-setup"),
+  "SecureFoundationSetupPage",
+);
 const VisionPage = lazyRouteComponent(() => import("@/routes/vision"), "VisionPage");
 
 /**
@@ -341,6 +345,11 @@ const routeTree = rootRoute.addChildren([
     agentsRoute,
   ]),
   createRoute({ getParentRoute: () => rootRoute, path: "/setup", component: SetupPage }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/secure-foundation-setup",
+    component: SecureFoundationSetupPage,
+  }),
   factoryViewRoute,
 ]);
 

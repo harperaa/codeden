@@ -5,6 +5,7 @@ import {
   SECURE_FOUNDATION_GITHUB_SCOPES,
   SECURE_FOUNDATION_NPX_PACKAGES,
   type SecureFoundationService,
+  secureFoundationInstallHint,
 } from "@codeden/contracts";
 import type { CliResult } from "./process";
 
@@ -158,13 +159,6 @@ function convexTeams(output: string): ConvexTeam[] {
   return teams;
 }
 
-const dopplerInstall =
-  process.platform === "darwin"
-    ? "brew install gnupg && brew install dopplerhq/cli/doppler"
-    : process.platform === "win32"
-      ? "winget install doppler.doppler"
-      : "See https://docs.doppler.com/docs/install-cli";
-
 export const SERVICE_COMMANDS: Record<SecureFoundationService, ServiceCommands> = {
   convex: {
     label: "Convex",
@@ -212,7 +206,7 @@ export const SERVICE_COMMANDS: Record<SecureFoundationService, ServiceCommands> 
       code: wordAfter(output, "code is:"),
     }),
     missing: "The Doppler command-line tool isn't installed, or isn't on the app's path.",
-    install: dopplerInstall,
+    install: secureFoundationInstallHint("doppler", process.platform),
     manual: "Run `doppler login` in a terminal, then check again.",
   },
   github: {
@@ -246,7 +240,7 @@ export const SERVICE_COMMANDS: Record<SecureFoundationService, ServiceCommands> 
       code: wordAfter(output, "one-time code:"),
     }),
     missing: "The GitHub command-line tool (gh) isn't installed, or isn't on the app's path.",
-    install: process.platform === "darwin" ? "brew install gh" : "See https://cli.github.com",
+    install: secureFoundationInstallHint("gh", process.platform),
     manual: "Run `gh auth login -h github.com -s workflow` in a terminal, then check again.",
   },
   vercel: {

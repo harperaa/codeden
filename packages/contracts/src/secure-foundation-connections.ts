@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { Id } from "./common";
-import type { SecureFoundationSecrets } from "./secure-foundation";
 
 /**
  * The sign-in checks of the Secure Foundation form (the service rows of its verification view): for each service the chosen options
@@ -24,19 +23,6 @@ export const SECURE_FOUNDATION_NPX_PACKAGES = {
 
 /** The GitHub permissions the template's deploy route checks for. */
 export const SECURE_FOUNDATION_GITHUB_SCOPES = ["repo", "workflow", "read:org"] as const;
-
-/** The services a form's answers need, in the order the step shows them. */
-export function secureFoundationServices(answers: {
-  secrets: SecureFoundationSecrets;
-  /** The deploy option is ticked. */
-  deploy?: boolean;
-}): SecureFoundationService[] {
-  return [
-    "convex",
-    ...(answers.secrets === "doppler" ? (["doppler"] as const) : []),
-    ...(answers.deploy ? (["github", "vercel"] as const) : []),
-  ];
-}
 
 /** A Convex team slug, as `--team` takes it. */
 export const ConvexTeamSlug = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/);
