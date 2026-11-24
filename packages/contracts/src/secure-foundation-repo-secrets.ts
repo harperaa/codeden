@@ -281,9 +281,9 @@ export const SECURE_FOUNDATION_KNOWN_REPO_SECRETS: Record<string, KnownRepoSecre
   CLAUDE_CODE_OAUTH_TOKEN: {
     purpose: `The sign-in of the template's Claude review workflows (the \`anthropics/claude-code-action\` action). They run on GitHub's servers, not on this computer, so they need a token for your own Claude subscription stored in the repository. The setup doesn't add it: creating it needs your own Claude sign-in, and the token would have passed through the setup session's transcript. Reviews you run inside ${HARDEN_PRODUCT_NAME} use your own subscription on this computer and don't need it.`,
     without:
-      "Without it the template's Claude review checks have no sign-in and fail shortly after they start, each time they run (the review on every pull request), unless the workflow itself skips them.",
+      "Without it the template's Claude review jobs don't review anything: the template's workflows skip them (a skipped review means no review ran), and copies of the workflows from before that change have no sign-in and fail shortly after they start, each time they run (the review on every pull request).",
     steps: ({ repository }) => [
-      "In your own terminal (not in an agent session), run `claude setup-token` (a command of Claude Code; it needs a Claude subscription). It prints a token that is valid for one year and saves it nowhere: copy it.",
+      "In a regular terminal window of your own, not inside a Claude Code session or another agent session (the command needs an interactive terminal, and a session would keep the token in its transcript), run `claude setup-token` (a command of Claude Code; it needs a Claude subscription) and approve the sign-in in your browser. It prints a token that is valid for one year and saves it nowhere: copy it.",
       addSecret("CLAUDE_CODE_OAUTH_TOKEN", repository),
       "Install the Claude GitHub App on the repository if it isn't there yet: https://github.com/apps/claude. Claude Code's guide has it as the first step of a manual setup.",
       CHECK_AGAIN,

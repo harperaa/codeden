@@ -22,6 +22,11 @@ export interface DeployFileShape {
   asksClaudeToken: boolean;
   /** The file's `github-setup` passes `--no-push`; a later step makes the first push. */
   noPush: boolean;
+  /**
+   * The file's `CLAUDE_CODE_OAUTH_TOKEN` question recommends "Skip for now" (later versions of
+   * the template): the setup's answer is then the file's own default, not a departure from it.
+   */
+  skipRecommended: boolean;
 }
 
 /** What the file does, from its text; null (no such file) reads as a file without the step. */
@@ -31,6 +36,7 @@ export function deployFileShape(text: string | null): DeployFileShape {
     storesDopplerToken: file.includes("doppler-create-ci-token"),
     asksClaudeToken: file.includes(CLAUDE_TOKEN_SECRET),
     noPush: /github-setup[^\n`]*--no-push/.test(file),
+    skipRecommended: /Skip for now \(Recommended\)/.test(file),
   };
 }
 
@@ -101,8 +107,9 @@ export function deployPart(
 
 /**
  * The repository's Actions secrets, right after the repository exists. With the file's own
- * secrets step: its `DOPPLER_TOKEN` part as written, and its `CLAUDE_CODE_OAUTH_TOKEN` part
- * replaced by a check of the names, because that part needs the person's own Claude sign-in and
+ * secrets step: its `DOPPLER_TOKEN` part as written. Its `CLAUDE_CODE_OAUTH_TOKEN` part: where
+ * the file recommends "Skip for now", as written with that answer; in the earlier version that
+ * recommended generating the token in the session, replaced by a check of the names, because that part needs the person's own Claude sign-in and
  * would put the token into this session's transcript. Without it: the same check, added, so the
  * final message can say whether the person still has to add the secret.
  */
@@ -117,9 +124,15 @@ function secretsStep(input: DeployPartInput, repo: string): string[] {
   const doppler = !file.storesDopplerToken
     ? ""
     : input.doppler
-      ? " Its `DOPPLER_TOKEN` part: as the file says (it runs `node scripts/setup.mjs doppler-create-ci-token` when the secret isn't listed; Part 2 didn't run it). If that fails, put the file's fallback under \"left for later\" and go on, as it says."
+      ? " Its `DOPPLER_TOKEN` part: as the file says (it runs `node scripts/setup.mjs doppler-create-ci-token` when the secret isn't listed; in Part 2 it was deferred). If that fails, put the file's fallback under \"left for later\" and go on, as it says."
       : " Its `DOPPLER_TOKEN` part: skip it, as the file says when `.doppler.yaml` doesn't exist.";
+  const step = `- **The file's GitHub Actions secrets step** (right after the owner is verified, before \`vercel.json\` and the first push; the one that lists the repository's secrets and handles \`DOPPLER_TOKEN\` and \`${CLAUDE_TOKEN_SECRET}\`). Use \`${repo}\` for its \`<GH_REPO>\`.`;
+  if (file.skipRecommended) {
+    return [
+      `${step} Its list of the repository's secrets is read-only and names only: run it as the file says and note whether \`${CLAUDE_TOKEN_SECRET}\` is among them (if the command fails, note that it couldn't be checked).${doppler} Its \`${CLAUDE_TOKEN_SECRET}\` part: if the name is listed, the file's "already set" path. Otherwise its question is answered "Skip for now", the file's recommended choice: the person isn't watching, and the token is made with \`claude setup-token\` in their own terminal. Take the file's "Skip for now" path, so Step 8's summary lists it with the file's next step, and go on. Don't take its other two choices: don't run \`claude setup-token\` or ask the person to, don't push a \`${CLAUDE_TOKEN_SECRET}\` of this session's environment, and don't run \`gh secret set\` for it.`,
+    ];
+  }
   return [
-    `- **The file's GitHub Actions secrets step** (right after the owner is verified, before \`vercel.json\` and the first push; the one that lists the repository's secrets and handles \`DOPPLER_TOKEN\` and \`${CLAUDE_TOKEN_SECRET}\`). Use \`${repo}\` for its \`<GH_REPO>\`.${doppler} Its \`${CLAUDE_TOKEN_SECRET}\` part: ${differs} don't ask the person, don't run \`claude setup-token\` or ask them to, don't test or push a \`${CLAUDE_TOKEN_SECRET}\` of this session's environment, and don't run \`gh secret set\` for it. The token needs the person's own Claude sign-in, they aren't watching, and generating or pasting it here would put it into this session's transcript. Instead ${check}. If it isn't listed, take the file's "Skip for now" path, so Step 8's summary lists it as skipped with the file's next step; if it is listed, the file's "already set" path.`,
+    `${step}${doppler} Its \`${CLAUDE_TOKEN_SECRET}\` part: ${differs} don't ask the person, don't run \`claude setup-token\` or ask them to, don't test or push a \`${CLAUDE_TOKEN_SECRET}\` of this session's environment, and don't run \`gh secret set\` for it. The token needs the person's own Claude sign-in, they aren't watching, and generating or pasting it here would put it into this session's transcript. Instead ${check}. If it isn't listed, take the file's "Skip for now" path, so Step 8's summary lists it as skipped with the file's next step; if it is listed, the file's "already set" path.`,
   ];
 }

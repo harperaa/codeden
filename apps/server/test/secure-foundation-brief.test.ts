@@ -9,6 +9,7 @@ import {
 } from "../src/services/secure-foundation/brief";
 import { removeTree } from "./support/remove-tree";
 import {
+  DEPLOY_FILE_SKIP_RECOMMENDED,
   DEPLOY_FILE_WITH_SECRETS_STEP,
   DEPLOY_FILE_WITHOUT_SECRETS_STEP,
   makeTemplateFixture,
@@ -37,6 +38,7 @@ const input = (over: Partial<SetupBriefInput> = {}): SetupBriefInput => ({
 
 /** The template's `/deploy-to-dev` with its own step for the repository's Actions secrets. */
 const withSecretsStep = { deployFile: deployFileShape(DEPLOY_FILE_WITH_SECRETS_STEP) };
+const skipRecommended = { deployFile: deployFileShape(DEPLOY_FILE_SKIP_RECOMMENDED) };
 
 /** Split a command line on spaces outside double quotes, dropping the quotes. */
 const words = (line: string) =>
@@ -235,12 +237,20 @@ describe("the setup brief", () => {
     ]);
     // Each says what is done instead and why, not just that it differs.
     for (const difference of all) expect(difference.length).toBeGreaterThan(80);
-    // A template whose deploy asks for the Claude token: one more, in its secrets step.
+    // A template whose deploy has the secrets step: the install's CI token step runs as written
+    // (it defers), and the Claude token question, which recommends generating the token in the
+    // session, is a difference.
+    const withoutInstallDifference = all
+      .map((d) => d.slice(0, 40))
+      .filter((d) => d !== " don't run its second command, `doppler-");
     const newer = differences(deployed({ doppler: true, ...withSecretsStep }));
     expect(newer.map((d) => d.slice(0, 40))).toEqual([
-      ...all.map((d) => d.slice(0, 40)),
+      ...withoutInstallDifference,
       " don't ask the person, don't run `claude",
     ]);
+    // The later template recommends "Skip for now": that answer is the file's own, no difference.
+    const latest = differences(deployed({ doppler: true, ...skipRecommended }));
+    expect(latest.map((d) => d.slice(0, 40))).toEqual(withoutInstallDifference);
     // Without Doppler the deploy's Step 1 differs only in printing no value.
     expect(
       differences(deployed()).find(
@@ -339,7 +349,7 @@ describe("the setup brief", () => {
           "so they need the repository secret `CLAUDE_CODE_OAUTH_TOKEN`: a token for your own Claude subscription. This setup didn't add it: creating it needs your own Claude sign-in, and the token would have passed through this session's transcript.",
         );
         expect(text).toContain(
-          "1. Run `claude setup-token` and copy the token it prints (valid for one year; it is saved nowhere).",
+          "1. Run `claude setup-token`, approve the sign-in in your browser and copy the token it prints (valid for one year; it is saved nowhere).",
         );
         expect(text).toContain(
           "2. Run `gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo acme-org/my-site` and paste the token when it asks (it isn't shown as you type).",
@@ -401,6 +411,38 @@ describe("the setup brief", () => {
       }
     });
 
+    it("answers the Claude token question with the file's own recommended Skip for now, where it has one", () => {
+      for (const doppler of [false, true]) {
+        const text = deployed({ doppler, ...skipRecommended });
+        expect(text).toContain(
+          "Its list of the repository's secrets is read-only and names only: run it as the file says",
+        );
+        expect(text).toContain(
+          'Otherwise its question is answered "Skip for now", the file\'s recommended choice',
+        );
+        expect(text).toContain('Take the file\'s "Skip for now" path');
+        expect(text).toContain(
+          "Don't take its other two choices: don't run `claude setup-token` or ask the person to",
+        );
+        expect(text).not.toContain(`Its \`CLAUDE_CODE_OAUTH_TOKEN\` part: ${DIFFERS}`);
+        expect(text).toContain(
+          "(apart from the `CLAUDE_CODE_OAUTH_TOKEN` question, answered above)",
+        );
+        expect(text).toContain("never run `claude setup-token`");
+        expect(text).not.toMatch(/sk-ant|printf|\$CLAUDE_CODE_OAUTH_TOKEN|<<|`!/);
+        // One command that sets a secret: the person's own step in the final message.
+        expect(text.match(/`gh secret set [^`]+`/g)).toEqual([
+          "`gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo acme-org/my-site`",
+        ]);
+        const at = positions(text, [
+          "**Step 2.5**",
+          "The file's GitHub Actions secrets step",
+          "**Step 3**",
+        ]);
+        expect(at).toEqual([...at].sort((a, b) => a - b));
+      }
+    });
+
     it("follows the deploy file's version: it creates the Doppler token exactly once and pushes when the file does", () => {
       const ciToken = (text: string) =>
         commands(text)
@@ -409,22 +451,36 @@ describe("the setup brief", () => {
       const before = deployed({ doppler: true });
       const after = deployed({ doppler: true, ...withSecretsStep });
       expect(ciToken(before)).toBe(1);
-      expect(ciToken(after)).toBe(1);
+      // After: the install runs it as its file says, and that version defers without a
+      // repository (creates nothing); the deploy's secrets step is the one that creates it.
+      expect(ciToken(after)).toBe(2);
+      expect(after).toContain(
+        "This version of the template defers it while the project has no GitHub repository: it answers `deferred: true` and creates nothing",
+      );
+      expect(after).toContain("If it answers anything else, stop");
+      expect(after).toContain("drop its last one, the CI service token, since it was deferred");
+      expect(before).not.toContain("deferred: true");
       // Before: the brief runs it right after the repository exists and records it in the install summary.
       expect(before).toContain("moved here from Part 2");
       expect(after).not.toContain("moved here from Part 2");
       expect(after).not.toContain("`node scripts/setup.mjs write-install-summary` again");
-      // After: the file's own secrets step runs it; Part 2 still doesn't.
+      // After: the file's own secrets step creates it.
       expect(after).toContain(
-        "Its `DOPPLER_TOKEN` part: as the file says (it runs `node scripts/setup.mjs doppler-create-ci-token` when the secret isn't listed; Part 2 didn't run it)",
+        "Its `DOPPLER_TOKEN` part: as the file says (it runs `node scripts/setup.mjs doppler-create-ci-token` when the secret isn't listed; in Part 2 it was deferred)",
       );
       expect(after).toContain(
-        "The deploy's own secrets step runs it in Part 3, once the repository exists.",
+        "The deploy's own secrets step stores the token once the repository exists.",
       );
       expect(deployed(withSecretsStep)).toContain(
         "Its `DOPPLER_TOKEN` part: skip it, as the file says when `.doppler.yaml` doesn't exist.",
       );
       expect(commands(deployed(withSecretsStep)).join()).not.toContain("ci-token");
+      // Without a deploy, a deferring template still runs it in the install, and it is left for later.
+      const local = setupBrief(input({ doppler: true, ...withSecretsStep }));
+      expect(commands(local).map((c) => run(c).command)).toContain("doppler-create-ci-token");
+      expect(local).toContain(
+        '"Run node scripts/setup.mjs doppler-create-ci-token once the project has a GitHub repository"',
+      );
       // The repository is created without a push where the file says so, and pushed in Step 4.
       const setup = (text: string) =>
         commands(text)
@@ -444,11 +500,19 @@ describe("the setup brief", () => {
         storesDopplerToken: false,
         asksClaudeToken: false,
         noPush: false,
+        skipRecommended: false,
       });
       expect(deployFileShape(DEPLOY_FILE_WITH_SECRETS_STEP)).toEqual({
         storesDopplerToken: true,
         asksClaudeToken: true,
         noPush: true,
+        skipRecommended: false,
+      });
+      expect(deployFileShape(DEPLOY_FILE_SKIP_RECOMMENDED)).toEqual({
+        storesDopplerToken: true,
+        asksClaudeToken: true,
+        noPush: true,
+        skipRecommended: true,
       });
       expect(deployFileShape(DEPLOY_FILE_WITH_SECRETS_STEP.replaceAll("2.6", "3.1"))).toEqual(
         deployFileShape(DEPLOY_FILE_WITH_SECRETS_STEP),

@@ -158,10 +158,12 @@ describe("what the person is told about a name", () => {
       /Reviews you run inside \S+ use your own subscription on this computer and don't need it\./,
     );
     expect(item.consequence).toContain(
-      "the template's Claude review checks have no sign-in and fail shortly after they start",
+      "the template's workflows skip them (a skipped review means no review ran)",
     );
+    expect(item.consequence).toContain("have no sign-in and fail shortly after they start");
     expect(item.consequence).toContain("(the review on every pull request)");
     expect(item.steps[0]).toContain("`claude setup-token`");
+    expect(item.steps[0]).toContain("not inside a Claude Code session or another agent session");
     expect(item.steps[1]).toContain("`gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo octo/my-site`");
     expect(item.steps[1]).toContain("Settings › Secrets and variables › Actions");
     expect(item.steps[2]).toContain("https://github.com/apps/claude");

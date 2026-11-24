@@ -53,15 +53,20 @@ console.log(JSON.stringify({ success: true, command, args }));
 `;
 
 /**
- * The template's `.claude/commands/deploy-to-dev.md` in its two versions, as far as the brief
+ * The template's `.claude/commands/deploy-to-dev.md` in its versions, as far as the brief
  * reads it: before the step that sets the new repository's Actions secrets, and with it (it then
  * runs `doppler-create-ci-token` itself, asks for `CLAUDE_CODE_OAUTH_TOKEN`, and creates the
- * repository with `--no-push`, pushing later).
+ * repository with `--no-push`, pushing later); and the later one whose question recommends
+ * "Skip for now" (`DEPLOY_FILE_SKIP_RECOMMENDED`).
  */
 export const DEPLOY_FILE_WITHOUT_SECRETS_STEP =
   '---\ndescription: Fake dev deploy\n---\n\n# /deploy-to-dev\n\n## Step 2: GitHub\n\n- Run: `node scripts/deploy.mjs github-setup --repo-name="<BASENAME>" --owner="<OWNER>"`\n\n## Step 4: Commit and push\n\n- Run: `git add -A && git commit -m "Prepare for Vercel deployment" && git push origin main`\n';
 export const DEPLOY_FILE_WITH_SECRETS_STEP =
   '---\ndescription: Fake dev deploy\n---\n\n# /deploy-to-dev\n\n## Step 2: GitHub\n\n- Run: `node scripts/deploy.mjs github-setup --repo-name="<BASENAME>" --owner="<OWNER>" --no-push`\n\n## Step 2.6: GitHub Actions secrets (DOPPLER_TOKEN, CLAUDE_CODE_OAUTH_TOKEN)\n\n`gh secret list -R <GH_REPO> --json name -q \'.[].name\'`\n\n### 2.6a: DOPPLER_TOKEN\n\n- Otherwise run `node scripts/setup.mjs doppler-create-ci-token`.\n\n### 2.6b: CLAUDE_CODE_OAUTH_TOKEN\n\nAsk: generate one with `! claude setup-token`, push an existing one, or skip.\n\n## Step 4: Commit and push\n\n- Run: `git push -u origin main`\n';
+export const DEPLOY_FILE_SKIP_RECOMMENDED = DEPLOY_FILE_WITH_SECRETS_STEP.replace(
+  "Ask: generate one with `! claude setup-token`, push an existing one, or skip.",
+  'Ask. Options: "Skip for now (Recommended)", "I\'ll do it in another terminal", "Push my existing token".',
+);
 
 const MODULES = `import { existsSync } from "node:fs";
 const [command, ...rest] = process.argv.slice(2);
