@@ -6,9 +6,9 @@ import {
   type SecureFoundationDeploy,
   secureFoundationDopplerProject,
 } from "@codeden/contracts";
-import { deployPart } from "./brief-deploy";
+import { CLAUDE_TOKEN_SECRET, type DeployFileShape, deployPart } from "./brief-deploy";
 
-export { DEPLOY_COMMAND_FILE } from "./brief-deploy";
+export { DEPLOY_COMMAND_FILE, type DeployFileShape, deployFileShape } from "./brief-deploy";
 
 /** The command file the template's install lives in. */
 export const INSTALL_COMMAND_FILE = ".claude/commands/install.md";
@@ -39,6 +39,8 @@ export interface SetupBriefInput {
   deploy: SecureFoundationDeploy | null;
   /** What the person confirmed will be created (`secureFoundationCreates`). */
   creates: SecureFoundationCreated[];
+  /** What the project's `/deploy-to-dev` does about the repository's secrets (`deployFileShape`). */
+  deployFile: DeployFileShape;
 }
 
 /**
@@ -100,6 +102,7 @@ export function setupBrief(input: SetupBriefInput): string {
             dopplerProject: secureFoundationDopplerProject(name),
             runsCommandFiles: input.runsCommandFiles,
             differs: DIFFERS,
+            file: input.deployFile,
           },
           deploy,
           failed,
@@ -182,14 +185,20 @@ function installPart(input: SetupBriefInput, failed: string): string[] {
     `- **Phase 5** (configure): \`node scripts/setup.mjs configure --admin-email="${adminEmail}"\`. Show each completed step and the names of the Convex variables it set. If its \`manualSteps\` isn't empty, keep them for the summary's \`--manual-steps\` and your final message.`,
     ...(doppler
       ? [
-          `- **Doppler post-init**: \`node scripts/setup.mjs doppler-sync-env-local\`, then \`node scripts/setup.mjs doppler-create-ci-token\`, as the file says. The project has no GitHub repository yet, so the second answers \`deferred: true\` and creates nothing, which the file expects: show its "deferred" line. If it answers anything else, stop and report "${failed}". ${
-            deploy
-              ? "The deploy's Step 2.6a stores the token once the repository exists."
-              : 'This project gets no repository, so put this in `--manual-steps` and under "left for later": "Run node scripts/setup.mjs doppler-create-ci-token once the project has a GitHub repository" (no commas: the script splits that list on them).'
-          }`,
+          input.deployFile.storesDopplerToken
+            ? `- **Doppler post-init**: \`node scripts/setup.mjs doppler-sync-env-local\`, then \`node scripts/setup.mjs doppler-create-ci-token\`, as the file says. This version of the template defers it while the project has no GitHub repository: it answers \`deferred: true\` and creates nothing, which the file expects; show its "deferred" line. If it answers anything else, stop and report "${failed}". ${
+                deploy
+                  ? "The deploy's own secrets step stores the token once the repository exists."
+                  : 'This project gets no repository, so put this in `--manual-steps` and under "left for later": "Run node scripts/setup.mjs doppler-create-ci-token once the project has a GitHub repository" (no commas: the script splits that list on them).'
+              }`
+            : `- **Doppler post-init**: \`node scripts/setup.mjs doppler-sync-env-local\`. ${
+                deploy
+                  ? `${DIFFERS} don't run its second command, \`doppler-create-ci-token\`, here: it stores the token as a secret of the project's GitHub repository, and there is none yet (depending on the template's version, the script would create the Doppler token with no repository of this project to store it in, or report it deferred). ${input.deployFile.storesDopplerToken ? "The deploy's own secrets step runs it in Part 3, once the repository exists." : "It runs in Part 3, right after the deploy's Step 2 has created the repository."}`
+                  : `${DIFFERS} don't run its second command, \`doppler-create-ci-token\`: it stores the token as a secret of the project's GitHub repository, and this project has none (depending on the template's version, the script would create the Doppler token with no repository of this project to store it in, or report it deferred). Put the file's own fallback in \`--manual-steps\` and under "left for later": "Run node scripts/setup.mjs doppler-create-ci-token once the project has a GitHub repository" (no commas: the script splits that list on them).`
+              }`,
         ]
       : ["- **Doppler post-init**: not in this mode."]),
-    `- **Phase 6, Step 1** (summary): \`node scripts/setup.mjs write-install-summary …\` with the arguments the file lists: \`--claim-url\`, \`--accountless="true"\`, \`--completed-steps\` from the file's ${doppler ? "Doppler-mode" : "legacy-mode"} list (only the steps that succeeded${doppler ? "; drop its last one, the CI service token, since it was deferred, as the file says" : ""}), \`--manual-steps\`, \`--modules-installed\` and \`--modules-skipped\` (comma-separated).`,
+    `- **Phase 6, Step 1** (summary): \`node scripts/setup.mjs write-install-summary …\` with the arguments the file lists: \`--claim-url\`, \`--accountless="true"\`, \`--completed-steps\` from the file's ${doppler ? "Doppler-mode" : "legacy-mode"} list (only the steps that succeeded${doppler ? (input.deployFile.storesDopplerToken ? "; drop its last one, the CI service token, since it was deferred, as the file says" : "; its last one, the CI service token, hasn't run yet") : ""}), \`--manual-steps\`, \`--modules-installed\` and \`--modules-skipped\` (comma-separated).`,
     "- **Phase 6, Step 2** (final summary): it goes into your final message, as described there.",
     `- **Phase 6, Step 3** (claim): ${DIFFERS} don't open the claim URL in a browser and don't ask the two claim questions: claiming needs the person's own Clerk sign-in, and they aren't watching. The claim URL and the file's warning go into your final message.`,
     `If a step fails where the file says to ask the person, don't ask: try once more, then stop, report "${failed}" and say which step failed and what was already created (the Clerk app, the Convex project, the Doppler project).`,
@@ -200,17 +209,30 @@ function installPart(input: SetupBriefInput, failed: string): string[] {
 /** The session's last message: the template's own summaries, then what only this setup adds. */
 function finalMessage(input: SetupBriefInput, repo: string): string[] {
   const { deploy } = input;
-  const product = HARDEN_PRODUCT_NAME;
   return [
     "## Your final message",
     `First line: the app's local URL.${deploy ? " Second line: the deployed URL the deploy returned (prefer its short vercel.app address), which stays up when this session stops." : ""}`,
     `Then the install's final summary as the file's Phase 6, Step 2 gives it ("Installation Complete!", with its sections Automated Steps, Claim Your Clerk App with its warning as written, Installation Summary Saved, Content Modules, Optional Steps and Start Development), adjusted to the mode and to what succeeded, as the file says.${deploy ? ' Then the deploy\'s summary as its Step 8 gives it ("Dev Deployment Complete!").' : ""}`,
-    ...(deploy
-      ? [
-          `Then this, as it is: "The template's GitHub workflows include its Claude reviews: \`claude-code-review.yml\` runs a security review and a code review on every pull request, and \`claude.yml\` answers when someone mentions @claude. They run on GitHub's servers, not on this computer, so they need the repository secret \`CLAUDE_CODE_OAUTH_TOKEN\`: a token for your own Claude subscription. The template's deploy skips it by default, and so did this setup, because the token is made in your own terminal. To add it, open a regular terminal window (not a Claude Code session, which would keep the token in its transcript), run \`claude setup-token\`, approve the sign-in in your browser and copy the token it prints. Then run \`gh secret set CLAUDE_CODE_OAUTH_TOKEN -R ${repo}\` and paste the token when it asks (what you paste isn't shown), and install the Claude GitHub App on the repository if it isn't there (https://github.com/apps/claude). Until then the template's Claude review jobs are skipped on every pull request: a skipped review means no review ran. Reviews you run inside ${product} use your own subscription on this computer and need nothing. GitHub copies no secret from a template, so the project page's Secure Foundation setup card lists every one ${repo} doesn't have, with the steps for each."`,
-        ]
-      : []),
+    ...(deploy ? claudeTokenMessage(repo, deploy.owner) : []),
     `Then how to stop the app (stop this session, or ask here to stop the two processes) and how to start it again (send "start the app" here, or run the two commands in a terminal in this folder), and that the URL only works while those processes run. Then anything left for later, the configure step's \`manualSteps\` included.`,
     'Last, under the heading "What was created": each item of the list above that now exists, by name, with where it is removed, and one line saying that archiving the project or deleting its folder removes none of them. If you stopped early, list only what was created before you stopped.',
+  ];
+}
+
+/**
+ * What the final message says about `CLAUDE_CODE_OAUTH_TOKEN`, from the deploy's read-only check:
+ * set, or the person's steps to add it. The steps are the repository-secrets card's
+ * (`SECURE_FOUNDATION_KNOWN_REPO_SECRETS`), so the message and the project page agree.
+ */
+function claudeTokenMessage(repo: string, owner: string): string[] {
+  const product = HARDEN_PRODUCT_NAME;
+  const name = `\`${CLAUDE_TOKEN_SECRET}\``;
+  return [
+    `Then, from the repository secrets check: if ${name} was listed, this one line: "${name} is already set in ${repo}: the template's Claude reviews can run." Otherwise (not listed, or it couldn't be checked) this, as it is:`,
+    `"Enable @claude and Claude PR reviews. The template's GitHub workflows include its Claude reviews: \`claude-code-review.yml\` reviews every pull request and \`claude.yml\` answers when someone mentions @claude. They run on GitHub's servers, not on this computer, so they need the repository secret ${name}: a token for your own Claude subscription. This setup didn't add it: creating it needs your own Claude sign-in, and the token would have passed through this session's transcript. To add it, in a regular terminal window of your own, not inside a Claude Code session or another agent session (the command needs an interactive terminal, and a session would keep the token in its transcript):`,
+    "1. Run `claude setup-token`, approve the sign-in in your browser and copy the token it prints (valid for one year; it is saved nowhere).",
+    `2. Run \`gh secret set ${CLAUDE_TOKEN_SECRET} --repo ${repo}\` and paste the token when it asks (it isn't shown as you type). Or add it on GitHub: the repository's Settings › Secrets and variables › Actions › New repository secret.`,
+    "3. Install the Claude GitHub App on the repository if it isn't there yet: https://github.com/apps/claude.",
+    `Or, for your next project, choose as its owner a GitHub organisation that already shares ${name} with its repositories. If ${owner} is one, there is nothing to do: the check sees only the repository's own secrets. Until it is set, the template's workflows skip the Claude reviews: a skipped review means no review ran (copies of the workflows from before that change fail them on every pull request instead). Reviews you run inside ${product} use your own subscription on this computer and need nothing. GitHub copies no secret from a template, so the project page's Secure Foundation setup card lists every one ${repo} doesn't have, with the steps for each."`,
   ];
 }

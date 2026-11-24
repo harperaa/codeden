@@ -148,7 +148,7 @@ describe("the repository secrets on the Secure Foundation card", () => {
     expect(text).toContain("fail shortly after they start");
     // The template's GitHub-side reviews need it, not the app or its reviews on this computer.
     expect(text).toContain("They run on GitHub's servers, not on this computer");
-    expect(text).toContain("The template's deploy skips it by default.");
+    expect(text).toContain("The setup doesn't add it: creating it needs your own Claude sign-in");
     const steps = [...missing.querySelectorAll("ol > li")].map((li) => li.textContent ?? "");
     expect(steps).toHaveLength(4);
     expect(steps[0]).toContain("claude setup-token");

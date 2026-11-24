@@ -35,7 +35,7 @@ console.log(JSON.stringify({ success: true, command, args }));
 const DEPLOY = `const FLAGS = {
   "check-tools": [],
   "gh-context": [],
-  "github-setup": ["repo-name", "owner"],
+  "github-setup": ["repo-name", "owner", "no-push"],
   "vercel-env-dev": [],
   "vercel-deploy": [],
   "write-summary": ["deploy-type", "vercel-url", "dashboard-url", "repo-url", "convex-prod-url", "convex-site-url", "frontend-api-url", "site-name", "admin-email", "google-oauth", "webhook-url", "completed-steps", "skipped-steps"],
@@ -45,12 +45,28 @@ const allowed = FLAGS[command];
 if (!allowed) { console.error("unknown command " + command); process.exit(2); }
 const args = {};
 for (const arg of rest) {
-  const match = /^--([a-z-]+)=(.*)$/.exec(arg);
+  const match = /^--([a-z-]+)(?:=(.*))?$/.exec(arg);
   if (!match || !allowed.includes(match[1])) { console.error("unknown flag " + arg); process.exit(2); }
-  args[match[1]] = match[2];
+  args[match[1]] = match[2] ?? "true";
 }
 console.log(JSON.stringify({ success: true, command, args }));
 `;
+
+/**
+ * The template's `.claude/commands/deploy-to-dev.md` in its versions, as far as the brief
+ * reads it: before the step that sets the new repository's Actions secrets, and with it (it then
+ * runs `doppler-create-ci-token` itself, asks for `CLAUDE_CODE_OAUTH_TOKEN`, and creates the
+ * repository with `--no-push`, pushing later); and the later one whose question recommends
+ * "Skip for now" (`DEPLOY_FILE_SKIP_RECOMMENDED`).
+ */
+export const DEPLOY_FILE_WITHOUT_SECRETS_STEP =
+  '---\ndescription: Fake dev deploy\n---\n\n# /deploy-to-dev\n\n## Step 2: GitHub\n\n- Run: `node scripts/deploy.mjs github-setup --repo-name="<BASENAME>" --owner="<OWNER>"`\n\n## Step 4: Commit and push\n\n- Run: `git add -A && git commit -m "Prepare for Vercel deployment" && git push origin main`\n';
+export const DEPLOY_FILE_WITH_SECRETS_STEP =
+  '---\ndescription: Fake dev deploy\n---\n\n# /deploy-to-dev\n\n## Step 2: GitHub\n\n- Run: `node scripts/deploy.mjs github-setup --repo-name="<BASENAME>" --owner="<OWNER>" --no-push`\n\n## Step 2.6: GitHub Actions secrets (DOPPLER_TOKEN, CLAUDE_CODE_OAUTH_TOKEN)\n\n`gh secret list -R <GH_REPO> --json name -q \'.[].name\'`\n\n### 2.6a: DOPPLER_TOKEN\n\n- Otherwise run `node scripts/setup.mjs doppler-create-ci-token`.\n\n### 2.6b: CLAUDE_CODE_OAUTH_TOKEN\n\nAsk: generate one with `! claude setup-token`, push an existing one, or skip.\n\n## Step 4: Commit and push\n\n- Run: `git push -u origin main`\n';
+export const DEPLOY_FILE_SKIP_RECOMMENDED = DEPLOY_FILE_WITH_SECRETS_STEP.replace(
+  "Ask: generate one with `! claude setup-token`, push an existing one, or skip.",
+  'Ask. Options: "Skip for now (Recommended)", "I\'ll do it in another terminal", "Push my existing token".',
+);
 
 const MODULES = `import { existsSync } from "node:fs";
 const [command, ...rest] = process.argv.slice(2);
@@ -66,6 +82,7 @@ const FILES: Record<string, string> = {
   ".gitignore": "node_modules\n.env.local\n",
   ".claude/commands/install.md":
     "---\ndescription: Fake install\n---\n\n# /install\n\nRun the setup script.\n",
+  ".claude/commands/deploy-to-dev.md": DEPLOY_FILE_WITHOUT_SECRETS_STEP,
   "package.json": `${JSON.stringify({ name: "fixture-template", private: true, scripts: { dev: "echo dev", convex: "echo convex" } }, null, 2)}\n`,
   "scripts/setup.mjs": SETUP,
   "scripts/modules.mjs": MODULES,

@@ -37,7 +37,7 @@ import {
 } from "@codeden/contracts";
 import { badRequest, conflict, errorMessage, ServiceError } from "../errors";
 import type { Exec } from "../exec";
-import { setupBrief } from "./brief";
+import { DEPLOY_COMMAND_FILE, deployFileShape, setupBrief } from "./brief";
 import { ConnectionsService } from "./connections/connections-service";
 import { claimLink, deployedLink, isOwnFolder, removeCreated } from "./folders";
 import { GH_TIMEOUT_MS } from "./repo-secrets/github";
@@ -330,6 +330,7 @@ export class SecureFoundationService {
               convexTeam: req.convexTeam ?? null,
               deploy: req.deploy ?? null,
               creates: secureFoundationCreates(req),
+              deployFile: deployFileShape(readCommandFile(dest, DEPLOY_COMMAND_FILE)),
             }),
           },
         });
@@ -447,3 +448,12 @@ export function chosenModules(
 }
 
 export { isOwnFolder, removeCreated } from "./folders";
+
+/** A command file the setup copied into the project, or null when the template has none. */
+function readCommandFile(dest: string, file: string): string | null {
+  try {
+    return readFileSync(join(dest, file), "utf8");
+  } catch {
+    return null;
+  }
+}
