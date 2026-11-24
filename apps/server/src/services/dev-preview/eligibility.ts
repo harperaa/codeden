@@ -1,6 +1,13 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Project, Session } from "@codeden/contracts";
+import {
+  type DevPreviewRecommended,
+  HARDEN_DEV_PREVIEW_SCRIPT,
+  HARDEN_WORKSPACE_PACKAGE,
+  hardenDevPreviewRecommended,
+  type Project,
+  type Session,
+} from "@codeden/contracts";
 
 /** Statuses in which an agent is at work: its preview is never stopped to make room. */
 const BUSY: ReadonlySet<Session["status"]> = new Set(["queued", "starting", "running", "waiting"]);
@@ -57,26 +64,44 @@ const RUNNERS: [lockfile: string, command: string][] = [
   ["bun.lockb", "bun run dev"],
 ];
 
+/** The project folder's `package.json`, or null when there is none that can be read. */
+function rootPackage(projectPath: string): { name?: unknown; scripts?: unknown } | null {
+  try {
+    const pkg: unknown = JSON.parse(readFileSync(join(projectPath, "package.json"), "utf8"));
+    return typeof pkg === "object" && pkg !== null ? pkg : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * A dev command to offer in the settings form. Only the fact that a `dev` script exists is
  * read from the repository: the suggested text is one of a few fixed commands, never a string
  * the repository wrote. It is shown to the person and goes nowhere unless they save it.
  */
 export function suggestDevCommand(projectPath: string): { command: string; reason: string } | null {
-  let scripts: unknown;
-  try {
-    const pkg = JSON.parse(readFileSync(join(projectPath, "package.json"), "utf8")) as {
-      scripts?: unknown;
-    };
-    scripts = pkg.scripts;
-  } catch {
-    return null;
-  }
-  const dev = (scripts as Record<string, unknown> | undefined)?.dev;
+  const dev = (rootPackage(projectPath)?.scripts as Record<string, unknown> | undefined)?.dev;
   if (typeof dev !== "string" || !dev.trim()) return null;
   const runner = RUNNERS.find(([lockfile]) => existsSync(join(projectPath, lockfile)));
   return {
     command: runner?.[1] ?? "npm run dev",
     reason: "package.json has a dev script",
   };
+}
+
+/**
+ * Whole settings to offer when the project folder is a checkout of this product's own
+ * repository: its root package has the workspace's name, and the repository's dev command for a
+ * preview is there as a plain file (a link doesn't count). Those two facts are all that is read;
+ * nothing is run, and the offered values are the app's own constants
+ * (`hardenDevPreviewRecommended`), so no text from the repository reaches a command.
+ */
+export function recommendDevPreview(projectPath: string): DevPreviewRecommended | null {
+  if (rootPackage(projectPath)?.name !== HARDEN_WORKSPACE_PACKAGE) return null;
+  try {
+    if (!lstatSync(join(projectPath, HARDEN_DEV_PREVIEW_SCRIPT)).isFile()) return null;
+  } catch {
+    return null;
+  }
+  return hardenDevPreviewRecommended();
 }

@@ -1,8 +1,14 @@
-import type { DevPreviewState, DevPreviewStatus, Session } from "@codeden/contracts";
+import {
+  type DevPreviewState,
+  type DevPreviewStatus,
+  HARDEN_DEV_PREVIEW_PORT_ERROR,
+  type Session,
+} from "@codeden/contracts";
 import { ExternalLink, RefreshCw, ScrollText } from "lucide-react";
 import { useState } from "react";
 import { lazyComponent } from "@/components/common/lazy-component";
 import { StatusDot } from "@/components/common/status-dot";
+import { DEV_PREVIEW_ANCHOR } from "@/components/harden/secure-foundation/dev-preview-offer";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -37,6 +43,13 @@ const TONE: Record<DevPreviewStatus, Tone> = {
 const REMOTE = "Previews are started on the computer running the app.";
 
 /**
+ * The project's dev preview settings. A plain link: the strip also renders where there is no
+ * router around it.
+ */
+const settingsHref = (projectId: string) =>
+  `/projects/${encodeURIComponent(projectId)}?tab=settings#${DEV_PREVIEW_ANCHOR}`;
+
+/**
  * The strip under a thread's header: a session's own dev preview, or on the PM thread the
  * preview of the project's base branch. Nothing shows for a thread without a project.
  */
@@ -69,9 +82,8 @@ function DevPreviewStrip(target: PreviewTarget) {
         data-testid="dev-preview-hint"
         className="flex h-8 shrink-0 items-center gap-2 border-b border-border/70 px-4 text-2xs text-muted-foreground"
       >
-        {/* A plain link: this strip also renders where there is no router around it. */}
         <a
-          href={`/projects/${encodeURIComponent(target.projectId)}?tab=settings`}
+          href={settingsHref(target.projectId)}
           className="underline-offset-2 hover:text-foreground hover:underline"
         >
           Set up a dev preview
@@ -79,6 +91,12 @@ function DevPreviewStrip(target: PreviewTarget) {
       </div>
     );
   }
+  // This repository's own dev command says so when a port variable is missing: the fix is in
+  // the settings, which offer the right ones.
+  const portsMissing =
+    state.status === "failed" &&
+    !state.remote &&
+    state.logTail.some((line) => line.startsWith(HARDEN_DEV_PREVIEW_PORT_ERROR));
   const busy = turn.isPending || restart.isPending;
   const blocked = state.enabled ? null : (state.unavailable ?? (state.remote ? REMOTE : null));
   const ended = state.status === "stopped" || state.status === "failed";
@@ -117,6 +135,15 @@ function DevPreviewStrip(target: PreviewTarget) {
           >
             {state.message}
           </span>
+        )}
+        {portsMissing && (
+          <a
+            href={settingsHref(target.projectId)}
+            className="shrink-0 underline underline-offset-2 hover:text-foreground"
+            data-testid="dev-preview-fix-ports"
+          >
+            Check the port variables in the settings
+          </a>
         )}
         {blocked && !state.message && (
           <span

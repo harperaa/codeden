@@ -106,6 +106,7 @@ export function mockDevPreviewApi(): DevPreviewApi {
     suggestion: configs.has(projectId)
       ? null
       : { command: "pnpm dev", reason: "package.json has a dev script" },
+    recommended: null,
     baseBranch: "main",
     notice: null,
     remote: false,

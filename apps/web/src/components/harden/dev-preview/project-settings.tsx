@@ -23,6 +23,7 @@ import { Switch } from "@/components/ui/switch";
 import { useClient } from "@/lib/api";
 import { DevPreviewActions } from "./actions";
 import { formChanged, formHolds, formOf, type PreviewForm, settingsOf } from "./form";
+import { DevPreviewRecommendedNotes } from "./recommended";
 import { devPreviewKey } from "./use-dev-preview";
 
 const mono = "h-8 font-mono text-xs";
@@ -35,6 +36,8 @@ const mono = "h-8 font-mono text-xs";
  * For a project Secure Foundation set up, the empty form starts filled in with the values that
  * work for such a project (`secureFoundationDevPreview`). That changes the form only: the same
  * button and the same confirmation stand between those values and anything being stored or run.
+ * The same goes for a checkout of this product's own repository, with the values the server
+ * offers for it (`recommended`, the app's own constants).
  */
 export function DevPreviewProjectSettings({ project }: { project: Project }) {
   const client = useClient();
@@ -51,11 +54,20 @@ export function DevPreviewProjectSettings({ project }: { project: Project }) {
   // Values to start from, for a Secure Foundation project that has no settings yet. After the
   // reset above on purpose, and only into a form nobody typed in.
   const offered = useSecureFoundationDevPreview(project.id)?.settings ?? null;
-  const fillable = view.data !== undefined && !view.data.remote;
-  const startFrom = fillable && !config ? offered : null;
+  const loaded = view.data !== undefined;
+  const fillable = loaded && !view.data?.remote;
+  // The same for a project the server recognised as a checkout of this product's repository.
+  const recommended = view.data?.recommended ?? null;
+  const startFrom = fillable && !config ? (offered ?? recommended?.settings ?? null) : null;
   useEffect(() => {
     if (startFrom) setForm((current) => (formChanged(current, null) ? current : formOf(startFrom)));
   }, [startFrom]);
+  // A link that names this section (the PM thread's "Set up a dev preview"): the section
+  // renders after the page did, so scroll to it once it is there.
+  useEffect(() => {
+    if (!loaded || window.location.hash !== `#${DEV_PREVIEW_ANCHOR}`) return;
+    document.getElementById(DEV_PREVIEW_ANCHOR)?.scrollIntoView?.({ block: "start" });
+  }, [loaded]);
 
   const stored = () => {
     void queryClient.invalidateQueries({ queryKey: devPreviewKey });
@@ -90,6 +102,10 @@ export function DevPreviewProjectSettings({ project }: { project: Project }) {
     if (result.ok) setAsking(result.settings);
     else setProblem(result.problem);
   };
+  /** Offered values into the form. The PM thread's switch stays the person's own. */
+  const fill = remote
+    ? undefined
+    : (settings: DevPreviewSettings) => set({ ...formOf(settings), pmEnabled: form.pmEnabled });
 
   return (
     <div id={DEV_PREVIEW_ANCHOR} className="scroll-mt-6" data-testid="dev-preview-settings">
@@ -100,11 +116,13 @@ export function DevPreviewProjectSettings({ project }: { project: Project }) {
         <SecureFoundationDevPreviewNotes
           projectId={project.id}
           filled={offered !== null && formHolds(form, offered)}
-          onFill={
-            remote
-              ? undefined
-              : (settings) => set({ ...formOf(settings), pmEnabled: form.pmEnabled })
-          }
+          onFill={fill}
+        />
+        <DevPreviewRecommendedNotes
+          recommended={recommended}
+          config={config}
+          form={form}
+          onFill={fill}
         />
         <SettingRow
           label="Dev command"

@@ -155,6 +155,18 @@ export const DevPreviewLimitsView = z.object({
 });
 export type DevPreviewLimitsView = z.infer<typeof DevPreviewLimitsView>;
 
+/**
+ * Settings the app knows to work for a project it recognised, offered to fill the whole form.
+ * The values are the app's own constants (`dev-preview-recommended.ts`), never text from the
+ * repository, and they are stored or run only when the person saves and confirms them.
+ */
+export const DevPreviewRecommended = z.object({
+  settings: DevPreviewSettings,
+  /** What the project was recognised as, as the form says it: "A CodeHarden checkout". */
+  reason: z.string().max(200),
+});
+export type DevPreviewRecommended = z.infer<typeof DevPreviewRecommended>;
+
 /** `GET /api/dev-preview/projects/:id`: what the project's settings show. */
 export const DevPreviewProject = z.object({
   projectId: Id,
@@ -165,6 +177,12 @@ export const DevPreviewProject = z.object({
    * the form. It is never stored or run unless the person saves and confirms it.
    */
   suggestion: z.object({ command: z.string(), reason: z.string() }).nullable(),
+  /**
+   * Whole settings for a project the app recognised (a checkout of its own repository). Sent
+   * with stored settings too, so the form can say when those can't work. Null for any other
+   * project and for another device.
+   */
+  recommended: DevPreviewRecommended.nullable().default(null),
   /** The project's base branch, which the PM thread's preview follows. Null when unknown. */
   baseBranch: z.string().nullable(),
   /** Something to tell the person after a change (a checkout that was kept, and why). */

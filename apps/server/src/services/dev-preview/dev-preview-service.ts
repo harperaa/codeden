@@ -14,7 +14,12 @@ import {
 import { conflict, notFound } from "../errors";
 import type { Exec } from "../exec";
 import { BasePreviews } from "./base-previews";
-import { previewBaseBranch, sessionUnavailable, suggestDevCommand } from "./eligibility";
+import {
+  previewBaseBranch,
+  recommendDevPreview,
+  sessionUnavailable,
+  suggestDevCommand,
+} from "./eligibility";
 import { type LeftoverOps, RunningRegistry } from "./leftovers";
 import { PreparedStore } from "./lockfile";
 import { isListening, PortAllocator, portIsFree } from "./ports";
@@ -180,10 +185,14 @@ export class DevPreviewService {
   project(projectId: string, remote: boolean): DevPreviewProject {
     const project = this.deps.project(projectId);
     const config = this.deps.store.config(projectId);
+    // For this computer only, and with stored settings too: the form says when those can't work.
+    const recommended = remote ? null : recommendDevPreview(project.path);
     return {
       projectId,
       config,
-      suggestion: config || remote ? null : suggestDevCommand(project.path),
+      // Whole settings are the better offer; one for a single field would contradict them.
+      suggestion: config || remote || recommended ? null : suggestDevCommand(project.path),
+      recommended,
       baseBranch: previewBaseBranch(project),
       notice: null,
       remote,
