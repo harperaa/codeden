@@ -7,6 +7,7 @@ import { FactoryGuideButton, FactoryGuideSheet } from "@/components/factory/fact
 import { PipelineBoard } from "@/components/factory-view/pipeline-board";
 import { viewPipeline } from "@/components/factory-view/stages";
 import {
+  DOCS_URL,
   FACTORY_GUIDE,
   FACTORY_GUIDE_SOURCE,
   GUIDE_ANCHOR,
@@ -88,7 +89,7 @@ describe("parseGuide", () => {
         "See [a](software-factory.md#merge-checks), [b](./github.md), [c](#the-merge-queue) and [d](https://example.com/x).",
       ),
     ).toBe(
-      "See [a](https://github.com/leonvanzyl/codeden/blob/main/docs/software-factory.md#merge-checks), [b](https://github.com/leonvanzyl/codeden/blob/main/docs/github.md), [c](#the-merge-queue) and [d](https://example.com/x).",
+      `See [a](${DOCS_URL}software-factory.md#merge-checks), [b](${DOCS_URL}github.md), [c](#the-merge-queue) and [d](https://example.com/x).`,
     );
     expect(guideLink("#the-merge-queue")).toEqual({ kind: "anchor", id: "the-merge-queue" });
     expect(guideLink("https://example.com/x")).toEqual({

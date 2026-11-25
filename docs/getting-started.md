@@ -1,6 +1,6 @@
 # Getting started
 
-From `npx codeden` to your first agent session in a couple of minutes, without typing a credential if your machine is already set up.
+From `npx codeharden` to your first agent session in a couple of minutes, without typing a credential if your machine is already set up.
 
 ## 1. Check the requirements
 
@@ -21,7 +21,7 @@ CodeDen uses your installed CLIs and their logins, including claude.ai, ChatGPT,
 ## 2. Start CodeDen
 
 ```sh
-npx codeden
+npx codeharden
 ```
 
 CodeDen creates its data directory (`~/.codeden/`), generates a per-install token, starts the server on `http://127.0.0.1:4317` (and the runner in the background), and opens your browser on an authenticated link. The terminal shows the URL in case the browser didn't open.
@@ -29,8 +29,8 @@ CodeDen creates its data directory (`~/.codeden/`), generates a per-install toke
 Prefer a global install?
 
 ```sh
-npm i -g codeden
-codeden
+npm i -g codeharden
+codeharden
 ```
 
 Useful flags: `--port <n>`, `--home <dir>`, `--no-open`. See the [CLI reference](reference.md#cli-reference).
@@ -58,7 +58,7 @@ CodeDen looks for Claude Code, Codex, OpenCode, the Cursor CLI, Gemini CLI and t
 You can re-open the checklist any time with **Run first-time setup again** at the bottom of the sidebar, or check from the terminal:
 
 ```sh
-npx codeden doctor
+npx codeharden doctor
 ```
 
 CodeDen also re-checks silently on every launch and warns when something changes, such as an expiring Claude login or a CLI version that's too old.
@@ -135,8 +135,8 @@ A project can override these for its own new sessions: open the project and its 
 
 ## Stopping CodeDen
 
-- **Ctrl+C** in the terminal stops the server. Agents mid-turn keep running in the runner and are picked up again by the next `codeden`.
-- `codeden stop` stops both the server and the runner.
+- **Ctrl+C** in the terminal stops the server. Agents mid-turn keep running in the runner and are picked up again by the next `codeharden`.
+- `codeharden stop` stops both the server and the runner.
 
 ## Next steps
 

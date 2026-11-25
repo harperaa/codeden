@@ -17,12 +17,17 @@
 # The launch runs before the quarantine is added: macOS would ask a person to allow a
 # downloaded app first (Privacy & Security > Open Anyway), which a CI job can't answer.
 #
+# REQUIRE_DEVELOPER_ID=1 (set when a Developer ID is configured) makes it stricter: the app
+# must be signed with a Developer ID, carry a stapled notarization ticket, and be accepted by
+# Gatekeeper as downloaded. An ad-hoc or un-notarized app then fails.
+#
 #   bash apps/desktop/scripts/check-mac-signature.sh [release-dir]
 #
 # Written for the bash 3.2 that ships with macOS.
 set -euo pipefail
 
 release="${1:-apps/desktop/release}"
+require_id="${REQUIRE_DEVELOPER_ID:-}"
 work="$(mktemp -d "${TMPDIR:-/tmp}/codeden-mac-check.XXXXXX")"
 pids=""
 
@@ -71,6 +76,12 @@ check_signature() {
   echo "$info" | grep -E '^(Identifier|Format|CodeDirectory|Signature|Authority|TeamIdentifier|Runtime Version)' || true
   if echo "$info" | grep -q 'Authority=Developer ID Application'; then
     echo "$label: signed with a Developer ID"
+    if [ "$require_id" = 1 ]; then
+      xcrun stapler validate "$app" ||
+        fail "$label: no notarization ticket is stapled to the app"
+    fi
+  elif [ "$require_id" = 1 ]; then
+    fail "$label: signing is configured, but the app is not signed with a Developer ID"
   elif echo "$info" | grep -q 'Signature=adhoc'; then
     echo "$label: signed ad hoc (no Developer ID configured)"
   else
@@ -114,10 +125,24 @@ check_signature() {
   [ "$helpers" -gt 0 ] || fail "$label: node-pty's spawn-helper is missing"
 }
 
+# The one .app in a folder (its name is the product's, which a fork sets).
+app_in() {
+  local found
+  for found in "$1"/*.app; do
+    if [ -d "$found" ]; then
+      echo "$found"
+      return 0
+    fi
+  done
+  fail "no .app in $1"
+  return 1
+}
+
 # --- 2. Launch ------------------------------------------------------------------------------
 check_launch() {
   local app="$1" label="$2"
-  local bin="$app/Contents/MacOS/CodeDen"
+  local bin
+  bin="$app/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
   local modules="$app/Contents/Resources/app/node_modules"
   local archs
   archs="$(lipo -archs "$bin")"
@@ -232,6 +257,8 @@ check_gatekeeper() {
     fail "$label: Gatekeeper would report the downloaded app as damaged"
   elif echo "$out" | grep -q ': accepted'; then
     echo "$label: Gatekeeper accepts it (Developer ID, notarized)"
+  elif [ "$require_id" = 1 ]; then
+    fail "$label: signing is configured, but Gatekeeper does not accept the downloaded app (not notarized?)"
   elif echo "$out" | grep -q ': rejected'; then
     echo "$label: Gatekeeper rejects it as unnotarized, as expected without a Developer ID (the user allows it once under Privacy & Security > Open Anyway)"
   else
@@ -254,11 +281,13 @@ for dmg in "$release"/*.dmg; do
   with_timeout 300 hdiutil attach -nobrowse -readonly -noautoopen -mountpoint "$mnt" "$dmg" > /dev/null
   dest="$work/dmg-$label"
   mkdir -p "$dest"
-  ditto "$mnt/CodeDen.app" "$dest/CodeDen.app"
+  src="$(app_in "$mnt")" || { hdiutil detach -quiet "$mnt"; continue; }
+  app="$dest/$(basename "$src")"
+  ditto "$src" "$app"
   hdiutil detach -quiet "$mnt"
-  check_signature "$dest/CodeDen.app" "$label"
-  check_launch "$dest/CodeDen.app" "$label"
-  check_gatekeeper "$dest/CodeDen.app" "$label"
+  check_signature "$app" "$label"
+  check_launch "$app" "$label"
+  check_gatekeeper "$app" "$label"
 done
 
 for zip in "$release"/*.zip; do
@@ -269,8 +298,9 @@ for zip in "$release"/*.zip; do
   dest="$work/zip-$label"
   mkdir -p "$dest"
   ditto -x -k "$zip" "$dest"
-  check_signature "$dest/CodeDen.app" "$label"
-  check_gatekeeper "$dest/CodeDen.app" "$label"
+  app="$(app_in "$dest")" || continue
+  check_signature "$app" "$label"
+  check_gatekeeper "$app" "$label"
 done
 
 if [ "$dmg_count" -eq 0 ] || [ "$zip_count" -eq 0 ]; then

@@ -12,6 +12,19 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
+// The update channel (package name, command): a module without imports, safe to load here.
+import {
+  HARDEN_COMMAND,
+  HARDEN_HOME_DIRNAME,
+  HARDEN_NPX_COMMAND,
+  HARDEN_PACKAGE_NAME,
+  HARDEN_PACKAGE_SEGMENTS,
+  HARDEN_PRODUCT_NAME,
+  HARDEN_UPDATE_COMMAND,
+} from "@codeden/contracts/harden-channel";
+
+/** The product's name, for `cli.ts`, which may import nothing but this module. */
+export { HARDEN_PRODUCT_NAME };
 
 /** How the running CLI was launched; set on `globalThis` for the rest of the bundle. */
 export interface LaunchInfo {
@@ -44,7 +57,7 @@ export function homeFromArgs(args: string[], env: NodeJS.ProcessEnv = process.en
     if (arg === "--home" && args[i + 1]) return resolve(args[i + 1] as string);
     if (arg.startsWith("--home=")) return resolve(arg.slice("--home=".length));
   }
-  return env.CODEDEN_HOME ? resolve(env.CODEDEN_HOME) : join(homedir(), ".codeden");
+  return env.CODEDEN_HOME ? resolve(env.CODEDEN_HOME) : join(homedir(), HARDEN_HOME_DIRNAME);
 }
 
 /** A repository or workspace build: the package root next to `dist/` still has `src/`. */
@@ -79,15 +92,20 @@ export function readPinnedVersion(home: string): string | null {
 
 /** The CLI entry of an installed version. */
 export function managedEntry(home: string, version: string): string {
-  return join(home, "app", version, "node_modules", "codeden", "dist", "cli.js");
+  return join(home, "app", version, "node_modules", ...HARDEN_PACKAGE_SEGMENTS, "dist", "cli.js");
 }
 
 /** Why the installed `version` can't start, or null when it looks complete. */
 export function managedProblem(home: string, version: string): string | null {
-  const root = join(home, "app", version, "node_modules", "codeden");
+  const root = join(home, "app", version, "node_modules", ...HARDEN_PACKAGE_SEGMENTS);
   let pkgVersion: unknown;
   try {
-    pkgVersion = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
+    const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+    // Only the channel's own package is ever switched to (same rule as the server's check).
+    if (pkg.name !== HARDEN_PACKAGE_NAME) {
+      return `it is the package ${String(pkg.name)}, not ${HARDEN_PACKAGE_NAME}`;
+    }
+    pkgVersion = pkg.version;
   } catch {
     return "its package.json is missing";
   }
@@ -121,8 +139,8 @@ export function decideLaunch(input: {
     return {
       kind: "self",
       warning:
-        `CodeDen ${pinned} in ${join(input.home, "app", pinned)} can't start (${problem}); ` +
-        `running ${input.selfVersion} instead. Run \`codeden update\` to reinstall it.`,
+        `${HARDEN_PRODUCT_NAME} ${pinned} in ${join(input.home, "app", pinned)} can't start (${problem}); ` +
+        `running ${input.selfVersion} instead. Run \`${HARDEN_UPDATE_COMMAND}\` to reinstall it.`,
     };
   }
   return { kind: "switch", version: pinned, entry };
@@ -154,9 +172,9 @@ export function parseLaunchedBy(raw: string | undefined, home: string): LaunchIn
 
 /** The command that starts this copy again. */
 export function restartCommandFor(kind: LaunchInfo["kind"], entry: string): string {
-  if (kind === "npx") return "npx codeden";
+  if (kind === "npx") return HARDEN_NPX_COMMAND;
   if (kind === "source") return `node ${entry}`;
-  return "codeden";
+  return HARDEN_COMMAND;
 }
 
 /** `x.y.z[-pre]` comparison (same rules as `compareVersions` in contracts). */

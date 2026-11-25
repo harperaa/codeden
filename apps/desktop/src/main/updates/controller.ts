@@ -39,7 +39,12 @@ const CHECK_RETRY_DELAYS_MS = [2_000, 6_000];
  * published (its installers are attached after it is created). Nothing to install yet.
  */
 export function isMissingUpdateFile(message: string): boolean {
-  return /cannot find latest(-[a-z]+)?\.yml/i.test(message) || /\b404\b/.test(message);
+  return (
+    /cannot find latest(-[a-z]+)?\.yml/i.test(message) ||
+    /\b404\b/.test(message) ||
+    // A repository that has published no release, or none with installers, has no feed at all.
+    /no published versions on github|unable to find latest version on github/i.test(message)
+  );
 }
 
 /** A failure worth retrying: GitHub 5xx or 429, a timeout, or a dropped connection. */

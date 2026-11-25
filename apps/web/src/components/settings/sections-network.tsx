@@ -1,4 +1,9 @@
-import type { NetworkAddress, NetworkStatus, RemoteDevice } from "@codeden/contracts";
+import {
+  HARDEN_COMMAND,
+  type NetworkAddress,
+  type NetworkStatus,
+  type RemoteDevice,
+} from "@codeden/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, LogOut, Monitor, Smartphone, Wifi } from "lucide-react";
 import { toast } from "sonner";
@@ -253,8 +258,10 @@ export function NetworkSettings() {
         {status.trustedOrigins.length === 0 ? (
           <p className="px-4 py-3.5 text-[13px] text-muted-foreground">
             None. Add one with{" "}
-            <code className="font-mono">codeden network origin add https://&lt;host&gt;</code> on
-            this computer.
+            <code className="font-mono">
+              {HARDEN_COMMAND} network origin add https://&lt;host&gt;
+            </code>{" "}
+            on this computer.
           </p>
         ) : (
           status.trustedOrigins.map((origin) => (

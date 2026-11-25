@@ -32,10 +32,10 @@ Inside the data directory:
   logs/runner.log       runner output
   deps/                 Claude Code support, installed on demand
   app/<version>/        CodeDen versions installed by one-click updates
-  app/current.json      which installed version `codeden` starts
+  app/current.json      which installed version `codeharden` starts
 ```
 
-Two copies can run side by side with different homes and ports, for example `codeden --home ~/.codeden-test --port 4400`.
+Two copies can run side by side with different homes and ports, for example `codeharden --home ~/.codeden-test --port 4400`.
 
 A minimal `.codeden/project.json`:
 
@@ -52,13 +52,13 @@ With `checks`, sessions can **keep going until checks pass**: after each turn Co
 ## CLI reference
 
 ```
-codeden [options]      Start CodeDen and open it in the browser
-codeden doctor         Check the installation (--install: add Claude Code support now)
-codeden update         Install the latest version and switch to it (--rollback: go back)
-codeden stop           Stop the server and the runner
-codeden password       Set the network access password (--generate: make one up)
-codeden network on|off Let phones on your network open CodeDen, or stop it
-codeden runner-link    Connect stdin/stdout to the runner in --home (run by the server
+codeharden [options]      Start CodeDen and open it in the browser
+codeharden doctor         Check the installation (--install: add Claude Code support now)
+codeharden update         Install the latest version and switch to it (--rollback: go back)
+codeharden stop           Stop the server and the runner
+codeharden password       Set the network access password (--generate: make one up)
+codeharden network on|off Let phones on your network open CodeDen, or stop it
+codeharden runner-link    Connect stdin/stdout to the runner in --home (run by the server
                        inside a sandbox; stdout carries only protocol frames)
 
 Options:
@@ -69,10 +69,10 @@ Options:
   -h, --help     Show this help
 ```
 
-- Running `codeden` while it's already running prints the URL and opens it again.
-- **Ctrl+C** stops the server; agents keep running in the runner. `codeden stop` stops both.
-- `codeden doctor` exits non-zero when CodeDen can't run a session, and prints the one command that fixes each problem.
-- Claude Code support (the Claude Agent SDK) isn't part of the package: it installs from npm into `~/.codeden/deps/` the first time it's needed, or with `codeden doctor --install`.
+- Running `codeharden` while it's already running prints the URL and opens it again.
+- **Ctrl+C** stops the server; agents keep running in the runner. `codeharden stop` stops both.
+- `codeharden doctor` exits non-zero when CodeDen can't run a session, and prints the one command that fixes each problem.
+- Claude Code support (the Claude Agent SDK) isn't part of the package: it installs from npm into `~/.codeden/deps/` the first time it's needed, or with `codeharden doctor --install`.
 
 Environment variables: `CODEDEN_HOME` (data directory), `CODEDEN_DEBUG=1` (server log lines in the terminal), `CODEDEN_SHELL` (terminal shell; PowerShell on Windows, `$SHELL` elsewhere), `CODEDEN_GITHUB_SYNC=0` (turn GitHub polling off).
 
@@ -80,13 +80,13 @@ Environment variables: `CODEDEN_HOME` (data directory), `CODEDEN_DEBUG=1` (serve
 
 CodeDen checks npm for a new version when it starts and every 6 hours (only the package name is sent; turn it off under **Settings > General > Updates**). When one is out, a banner says so: **What's new** shows the release notes, **Update now** installs it and restarts CodeDen, and the page reconnects on its own. Running agents are drained and resumed, the same as after any runner restart.
 
-- **How it works.** New versions install side by side into `~/.codeden/app/<version>/`, and `~/.codeden/app/current.json` names the one to run. Whatever `codeden` you start (`npx codeden`, a global install) checks that file first and runs the newer installed version in its place, so there's nothing to reinstall by hand. The previous version is kept for rollback.
+- **How it works.** New versions install side by side into `~/.codeharden/app/<version>/`, and `~/.codeharden/app/current.json` names the one to run. Whatever `codeharden` you start (`npx codeharden`, a global install) checks that file first and runs the newer installed version in its place, so there's nothing to reinstall by hand. The previous version is kept for rollback.
 - **Install automatically.** Set **Updates** to *Install automatically* to download new versions in the background; they start the next time you open CodeDen (or right away with **Restart now**).
-- **From the terminal.** `codeden update` does the same as the button (and restarts a running CodeDen); `codeden update --rollback` goes back to the previous version. `codeden doctor` lists the installed versions and which one starts.
+- **From the terminal.** `codeharden update` does the same as the button (and restarts a running CodeDen); `codeharden update --rollback` goes back to the previous version. `codeharden doctor` lists the installed versions and which one starts.
 - **Roll back** from **Settings > About** as well.
 - **If it can't restart itself** (for example when started some other way), the banner says "Update installed, restart CodeDen to finish" with the command to run.
 - **Running from source** (a clone of this repository) never switches versions: pull and rebuild (`git pull && pnpm install && pnpm build`).
-- **The old way still works:** `npm i -g codeden@latest`, or `npx codeden@latest`. A globally installed version newer than the side-by-side one always wins.
-- **Upgrading from 0.1.0:** 0.1.0 predates one-click updates; update it once by hand (`npm i -g codeden@latest` or `npx codeden@latest`).
+- **The old way still works:** `npm i -g codeharden@latest`, or `npx codeharden@latest`. A globally installed version newer than the side-by-side one always wins.
+- **Upgrading from 0.1.0:** 0.1.0 predates one-click updates; update it once by hand (`npm i -g codeharden@latest` or `npx codeharden@latest`).
 - **The desktop app** updates itself from GitHub Releases with the same banner and the same setting; see [The desktop app](desktop.md#updates).
 

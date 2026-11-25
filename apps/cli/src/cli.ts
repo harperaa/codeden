@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   decideLaunch,
+  HARDEN_PRODUCT_NAME,
   homeFromArgs,
   installKind,
   LAUNCH_KEY,
@@ -67,7 +68,7 @@ async function run(): Promise<void> {
       } catch (error) {
         // It failed before starting anything: run this copy and say why.
         const reason = error instanceof Error ? error.message.split(/\r?\n/)[0] : String(error);
-        warning = `CodeDen ${decision.version} failed to load (${reason}); running ${selfVersion} instead.`;
+        warning = `${HARDEN_PRODUCT_NAME} ${decision.version} failed to load (${reason}); running ${selfVersion} instead.`;
       }
     } else {
       warning = decision.warning;
@@ -77,7 +78,10 @@ async function run(): Promise<void> {
   }
 
   globals[VERSION_KEY] = selfVersion;
-  if (args.includes("--version") || args.includes("-v")) {
+  // The updater's probe (`--version` with CODEDEN_NO_SWITCH=1, `reportedVersion`) reads the bare
+  // package version; anyone else gets the version line from `main.ts`.
+  const probe = process.env.CODEDEN_NO_SWITCH === "1";
+  if (probe && (args.includes("--version") || args.includes("-v"))) {
     console.log(selfVersion);
     process.exit(0);
   }

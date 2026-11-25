@@ -1,0 +1,136 @@
+name: Sync cooldown report
+
+# Shows the 48-hour cooldown of upstream changes on the pull requests it applies to
+# (docs/codeharden-sync-cooldown.md).
+#
+# This fork's own workflow. Upstream code reaches users only after it was approved and then
+# waited 48 hours. For every open pull request into the working branch that brings upstream
+# commits (a `sync/...` branch, or any other branch that carries upstream commits the working
+# branch lacks) this workflow writes the commit status "Sync cooldown" on the head commit:
+#   pending  approved and waiting; the text says until when ("Cooling down until 2026-01-07
+#            14:55 UTC (approved 2026-01-05 14:55 UTC). Expected. Not a CI check."), or on hold
+#   failure  something was pushed after the approval: review again and re-apply the label
+#   success  the 48 hours are over and nothing was pushed since, or "waived by the owner"
+# A pull request that brings no upstream commits gets no status and is not touched.
+#
+# A `sync/...` pull request gets its first status when it is approved, not before. The second
+# review approves a sync only when every check on its head has finished and passed; a status
+# that can't be green before the approval would keep that review from ever approving. Once a
+# head has the status it is kept true (on hold, pushed after the approval, label taken off).
+# The status is a clock, not a CI check: nobody waits for it or tries to turn it green
+# (AGENTS.md, "The sync cooldown").
+#
+# It decides nothing itself. The rule is scripts/harden/sync-cooldown.sh, the same one the
+# sync workflow's merge job asks before it merges and scripts/harden/release.sh asks before it
+# releases; this workflow only shows its answer. The status is not what holds a sync back: a
+# status can be written by anyone who can push, so the merge job and the release script ask
+# the rule again, from GitHub's own records, and never read the status.
+#
+# When it runs
+#   - every hour: this is how a pull request turns green by itself once its hours are over;
+#   - when a label is added to or removed from a pull request: the approval, a hold;
+#   - when a "Waive sync cooldown" run has finished;
+#   - by hand (Actions > Sync cooldown report > Run workflow).
+# A new head commit has no status until the next of these: a moved head never inherits green.
+#
+# Security of this workflow
+#   - Permissions are the minimum: contents: read (the head branches' push history),
+#     pull-requests: read (the pull requests and their label events), actions: read (the
+#     waiver runs and who approved them), statuses: write (the status). Nothing else.
+#   - It uses no actions at all, only `git` and `gh` from the runner image.
+#   - `pull_request_target` runs this file from the default branch, never a pull request's
+#     copy of it, and no pull request's code is checked out or run: the scripts come from the
+#     working branch itself, and commits are fetched into a bare repository as data, only to
+#     compare ancestry.
+#   - The only value taken from a pull request is its number, which reaches the script through
+#     an environment variable and is checked to be a number. The repository variables arrive
+#     through `env:` as well, and scripts/harden/fork-config.sh checks their shape.
+#   - On a label event the job never fails, whatever goes wrong in its step: it warns and
+#     leaves the status as it was, and the hourly run tries again. A failed check of this
+#     workflow on a sync pull request's head would otherwise stop the merge job, which
+#     requires every check on the head to have passed. The hourly run fails only when the
+#     workflow itself is broken (the scripts or upstream can't be fetched, the pull requests
+#     can't be listed); a pull request it can't evaluate is a warning.
+on:
+  pull_request_target:
+    types: [labeled, unlabeled]
+  schedule:
+    - cron: "43 * * * *"
+  workflow_run:
+    workflows: ["Waive sync cooldown"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions: {}
+
+# The runs that look at every pull request (hourly, after a waiver, by hand) go one at a time.
+# A label event's run is in a group of its own and never waits: a run that waits can be
+# replaced by a newer one, and the cancelled check that leaves on a sync pull request's head
+# would stop the merge job (see above).
+concurrency:
+  group: sync-cooldown-${{ github.event_name == 'pull_request_target' && github.run_id || 'all' }}
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Evaluate
+    # A label event only for a pull request into the working branch.
+    if: ${{ github.event_name != 'pull_request_target' || github.event.pull_request.base.ref == (vars.HARDEN_BRANCH || 'harden') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+      statuses: write
+    env:
+      # The fork's names, for scripts/harden/fork-config.sh. Empty means CodeHarden's own,
+      # which only CodeHarden's repository gets; a fork without them stops with their names.
+      UPSTREAM_REPO: ${{ vars.UPSTREAM_REPO }}
+      UPSTREAM_BRANCH: ${{ vars.UPSTREAM_BRANCH }}
+      HARDEN_BRANCH: ${{ vars.HARDEN_BRANCH }}
+      FORK_CONFIG_NO_GH: "1"
+      SYNC_WAIVER_APPROVERS: ${{ vars.SYNC_WAIVER_APPROVERS }}
+      SYNC_COOLDOWN_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Evaluate the pull requests that bring upstream commits and write the status
+        # A label event's run never fails the job (see the top of this file).
+        continue-on-error: ${{ github.event_name == 'pull_request_target' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # harden-scripts:begin
+          # This fork's own scripts, from the working branch itself and from nowhere else: no
+          # pull request's code is checked out or run. Commits are fetched as data only.
+          branch="${HARDEN_BRANCH:-harden}"
+          if [[ ! "$branch" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]]; then
+            echo "::error::The repository variable HARDEN_BRANCH must be a branch name."; exit 1
+          fi
+          git init --quiet --bare "$RUNNER_TEMP/cooldown.git"
+          cd "$RUNNER_TEMP/cooldown.git"
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}"
+          git fetch --quiet --no-tags origin "refs/heads/${branch}:refs/sync/target"
+          mkdir -p "$RUNNER_TEMP/harden"
+          for script in fork-config.sh sync-cooldown.sh sync-cooldown-report.sh sync-waiver.sh; do
+            git show "refs/sync/target:scripts/harden/${script}" > "$RUNNER_TEMP/harden/${script}"
+          done
+          # harden-scripts:end
+
+          if [ "$EVENT_NAME" != "pull_request_target" ]; then
+            bash "$RUNNER_TEMP/harden/sync-cooldown-report.sh" all
+            exit 0
+          fi
+          if [[ ! "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::The event has no pull request number."; exit 1
+          fi
+          # 0: over, waived or not a sync. 1: not over. Both are answers. Anything else is
+          # no answer: warn, leave the status as it was, and let the hourly run try again.
+          code=0
+          bash "$RUNNER_TEMP/harden/sync-cooldown-report.sh" pull-request "$PR_NUMBER" || code=$?
+          if [ "$code" != 0 ] && [ "$code" != 1 ]; then
+            echo "::warning::The cooldown of pull request #${PR_NUMBER} couldn't be evaluated on this event; the hourly run looks at it again."
+          fi

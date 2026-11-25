@@ -29,12 +29,12 @@ import {
  * Docker backend runs, built and parsed without Docker.
  */
 
-const ref = sandboxRefFor("codeden-3f2a1b4c-9d8e7f");
+const ref = sandboxRefFor("codeharden-3f2a1b4c-9d8e7f");
 const spec: SandboxSpec = {
   recordId: "3f2a1b4c-9d8e7f",
   sessionId: "3f2a1b4c-0000-4000-8000-000000000001",
   projectId: "p-1",
-  image: "codeden-runner:0.7.2",
+  image: "codeharden-runner:0.7.2",
   cpus: 2,
   memoryMb: 4096,
   fake: true,
@@ -111,17 +111,17 @@ describe("detect (docker version)", () => {
 
 describe("the runner image", () => {
   it("is named per version and built from a context with its labels", () => {
-    expect(imageName("0.7.2")).toBe("codeden-runner:0.7.2");
-    expect(imageLabelsArgs("codeden-runner:0.7.2")).toEqual([
+    expect(imageName("0.7.2")).toBe("codeharden-runner:0.7.2");
+    expect(imageLabelsArgs("codeharden-runner:0.7.2")).toEqual([
       "image",
       "inspect",
       "--format",
       "{{json .Config.Labels}}",
-      "codeden-runner:0.7.2",
+      "codeharden-runner:0.7.2",
     ]);
     expect(
       buildArgs({
-        image: "codeden-runner:0.7.2",
+        image: "codeharden-runner:0.7.2",
         context: "/tmp/ctx",
         version: "0.7.2",
         build: "ab12",
@@ -129,19 +129,19 @@ describe("the runner image", () => {
     ).toEqual([
       "build",
       "--tag",
-      "codeden-runner:0.7.2",
+      "codeharden-runner:0.7.2",
       "--label",
-      "codeden.version=0.7.2",
+      "codeharden.version=0.7.2",
       "--label",
-      "codeden.build=ab12",
+      "codeharden.build=ab12",
       "/tmp/ctx",
     ]);
   });
 
   it("reads image labels", () => {
-    expect(parseLabels('{"codeden.build":"ab12","codeden.version":"0.7.2"}\n')).toEqual({
-      "codeden.build": "ab12",
-      "codeden.version": "0.7.2",
+    expect(parseLabels('{"codeharden.build":"ab12","codeharden.version":"0.7.2"}\n')).toEqual({
+      "codeharden.build": "ab12",
+      "codeharden.version": "0.7.2",
     });
     expect(parseLabels("null")).toEqual({});
     expect(parseLabels("not json")).toBeNull();
@@ -155,16 +155,16 @@ describe("provision", () => {
       "volume",
       "create",
       "--label",
-      "codeden.install=inst01",
+      "codeharden.install=inst01",
       "--label",
-      `codeden.session=${spec.sessionId}`,
+      `codeharden.session=${spec.sessionId}`,
       "--label",
-      "codeden.project=p-1",
+      "codeharden.project=p-1",
       "--label",
-      "codeden.runner=3f2a1b4c-9d8e7f",
+      "codeharden.runner=3f2a1b4c-9d8e7f",
       "--label",
-      "codeden.version=0.7.2",
-      "codeden-3f2a1b4c-9d8e7f-data",
+      "codeharden.version=0.7.2",
+      "codeharden-3f2a1b4c-9d8e7f-data",
     ]);
   });
 
@@ -182,15 +182,15 @@ describe("provision", () => {
     expect(flag("--restart")).toBe("unless-stopped");
     expect(flag("--mount")).toBe(`type=volume,source=${ref.volume},target=/data`);
     for (const label of [
-      `codeden.session=${spec.sessionId}`,
-      "codeden.project=p-1",
-      "codeden.version=0.7.2",
-      "codeden.install=inst01",
+      `codeharden.session=${spec.sessionId}`,
+      "codeharden.project=p-1",
+      "codeharden.version=0.7.2",
+      "codeharden.install=inst01",
     ]) {
       expect(args).toContain(label);
     }
-    expect(args.slice(args.indexOf("codeden-runner:0.7.2"))).toEqual([
-      "codeden-runner:0.7.2",
+    expect(args.slice(args.indexOf("codeharden-runner:0.7.2"))).toEqual([
+      "codeharden-runner:0.7.2",
       "codeden-runner",
       "--home",
       "/data",
@@ -266,8 +266,10 @@ describe("the link and the lifecycle", () => {
     expect(parseState('"exited"')).toBe("exited");
     expect(parseState("created")).toBe("exited");
     expect(parseState('"paused"')).toBe("other");
-    expect(isNoSuchObject("Error response from daemon: No such container: codeden-x")).toBe(true);
-    expect(isNoSuchObject("Error: No such object: codeden-x")).toBe(true);
+    expect(isNoSuchObject("Error response from daemon: No such container: codeharden-x")).toBe(
+      true,
+    );
+    expect(isNoSuchObject("Error: No such object: codeharden-x")).toBe(true);
     expect(isNoSuchObject("permission denied")).toBe(false);
   });
 
@@ -277,7 +279,7 @@ describe("the link and the lifecycle", () => {
       "--all",
       "--no-trunc",
       "--filter",
-      "label=codeden.install=inst01",
+      "label=codeharden.install=inst01",
       "--format",
       "{{json .}}",
     ]);
@@ -287,10 +289,10 @@ describe("the link and the lifecycle", () => {
       row(
         ref.container,
         "running",
-        `codeden.install=inst01,codeden.session=s1,codeden.project=p-1,codeden.runner=3f2a1b4c-9d8e7f,codeden.version=0.7.2`,
+        `codeharden.install=inst01,codeharden.session=s1,codeharden.project=p-1,codeharden.runner=3f2a1b4c-9d8e7f,codeharden.version=0.7.2`,
       ),
       "not json",
-      row("codeden-other", "exited", "codeden.install=inst01"),
+      row("codeharden-other", "exited", "codeharden.install=inst01"),
       "",
     ].join("\n");
     expect(parseList(stdout)).toEqual([
@@ -304,8 +306,8 @@ describe("the link and the lifecycle", () => {
         state: "running",
       },
       {
-        container: "codeden-other",
-        volume: "codeden-other-data",
+        container: "codeharden-other",
+        volume: "codeharden-other-data",
         sessionId: null,
         projectId: null,
         recordId: null,

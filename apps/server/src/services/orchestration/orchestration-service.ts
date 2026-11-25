@@ -23,6 +23,7 @@ import type { TrustedAuthors } from "../github/review-trust";
 import type { InboxService } from "../inbox-service";
 import type { ProjectService } from "../projects/project-service";
 import type { RunnerPort } from "../runner-port";
+import { holdsPmWakes } from "../secure-foundation/quiet";
 import { inArchivedProject } from "../sessions/archived-project";
 import { mayHaveStarted } from "../sessions/input-decorator";
 import type { SessionRepo } from "../sessions/repo";
@@ -472,6 +473,8 @@ export class OrchestrationService {
     if (this.notices.undelivered(role, projectId).length === 0) return "empty";
     // An archived project's sessions take no input (§13): its PM isn't woken, or started.
     if (inArchivedProject(this.deps.projects, { projectId })) return "empty";
+    // CodeHarden: a quiet Secure Foundation project's manager is not woken; its notices wait.
+    if (holdsPmWakes(this.deps, projectId)) return "empty";
     const session = await this.roles.ensure(role, projectId);
     if (isActiveSession(session)) return "busy";
     await this.deps.sessions.send(

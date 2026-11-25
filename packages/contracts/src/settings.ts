@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AutonomyLevel, ProviderId, QuietHours, ReasoningEffort } from "./common";
+import { HARDEN_AUTO_SWITCH_ON_LIMIT_DEFAULT } from "./harden-defaults";
 import { TokenSaverSettings } from "./token-saver";
 import { UpdateMode } from "./updates";
 import { DictationEngine, WhisperModelId } from "./voice-api";
@@ -119,7 +120,7 @@ export const Settings = z.object({
        * ready provider by itself, and back once the limit has reset. Off: the turn fails as any
        * other. Agent sessions aren't moved; they wait for the reset (`sessions.autoRetry`).
        */
-      autoSwitchOnLimit: z.boolean().default(true),
+      autoSwitchOnLimit: z.boolean().default(HARDEN_AUTO_SWITCH_ON_LIMIT_DEFAULT),
     })
     .prefault({}),
   /** Small, cheap model for side jobs (§7.4). */

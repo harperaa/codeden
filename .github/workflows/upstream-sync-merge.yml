@@ -1,0 +1,557 @@
+name: Upstream sync merge
+
+# CodeHarden's delayed merge of upstream changes. The rules:
+#
+# Branches
+#   main    a pure mirror of upstream main (leonvanzyl/codeden). Nobody commits to it; this
+#           workflow only ever fast-forwards it.
+#   harden  CodeHarden: upstream plus this fork's own changes. Upstream arrives by merge
+#           commits, never by rebase or force-push.
+#
+# Those names are CodeHarden's. A fork of CodeHarden runs this same file against its own
+# upstream, from repository variables (scripts/harden/setup-fork.sh creates them; the README
+# section "Make your own hardened fork" has the steps):
+#   UPSTREAM_REPO    the owner/repo that is followed       CodeHarden: leonvanzyl/codeden
+#   UPSTREAM_BRANCH  the branch of it that is followed     CodeHarden: main
+#   PACKAGE_NAME     the npm package this fork publishes   CodeHarden: codeharden
+#   HARDEN_BRANCH    optional: the working branch, default harden
+#   MIRROR_BRANCH    optional: the mirror branch. Default: the upstream branch's name (main),
+#                    or `mirror` when the working branch has that name (a fork of CodeHarden
+#                    follows harden, so its mirror is `mirror` and its working branch harden).
+# Only CodeHarden itself (harperaa/codeharden) runs without the first three: anywhere else the
+# job "config" fails until they are set, so a fork never follows or releases by a default.
+# Below, "main" and "harden" stand for the mirror branch and the working branch.
+#
+# Job "config": reads and checks those variables, and hands the values to the other jobs.
+#
+# Job "mirror": fast-forwards this repository's main to upstream main. If main has commits
+# upstream doesn't have, the job fails and changes nothing.
+#
+# Job "merge": looks at every open pull request into harden whose head branch starts with
+# `sync/`, and merges it with a merge commit only if ALL of these hold:
+#   1. The head branch lives in this repository (not in someone else's fork).
+#   2. It has the label `sync-approved`, and neither `sync-needs-review` nor `sync-hold`.
+#   3. `sync-approved` was last applied at least 48 hours ago. The time comes from the pull
+#      request's timeline (its `labeled` events), not from when the pull request was opened.
+#   4. The head branch has not been pushed to since that label was applied: the approval
+#      covers the commit that was reviewed, not a later one. Re-apply the label to restart
+#      the 48 hours.
+#      3 and 4 are the cooldown. This file does not decide them: it asks
+#      scripts/harden/sync-cooldown.sh, the one rule that the pull request's "Sync cooldown"
+#      status and scripts/harden/release.sh ask too, and merges only on the answer
+#      "satisfied" or "waived". Waived means the owner let this upstream commit through
+#      early, with the "Waive sync cooldown" workflow (sync-waiver.yml), whose run a required
+#      reviewer approved; every other condition in this list still applies to a waived one.
+#   5. The head commit is on upstream main, or it is a two-parent merge whose first parent is
+#      on upstream main and whose second parent is on harden. So a sync pull request can only
+#      bring upstream code plus the reviewer's conflict-resolution merge; a label alone can't
+#      get an arbitrary branch merged.
+#   6. Its changes against harden touch none of the paths in PROTECTED_PATHS (this fork's own
+#      release scripts and cooldown workflows, what builds the desktop installers, and the
+#      three files a release writes). One that does gets the label `sync-needs-review` and is
+#      left for a manual merge.
+#   7. Every check on the head commit has finished and passed (at least one check must
+#      exist), and GitHub reports the pull request as mergeable.
+# Anything else is skipped, and the log says why.
+#
+# Job "release": runs only when this run merged at least one sync pull request (or when a
+# manual run asks for it, after a sync pull request was merged by hand). It makes one
+# CodeHarden release on harden, in a single commit `release: <version> (upstream <sha>)`:
+#   - VERSION: `YYYY.MMDD.HHMM`, the release time in America/New_York.
+#   - CODEHARDEN-CHANGELOG.md: a new entry on top, with the upstream commit subjects merged
+#     since the last release and this fork's own commits since then (no merge commits).
+#   - state/upstream-base: the upstream commit harden now contains, where the next release's
+#     upstream section starts.
+# The commit is tagged `v<version>`. If that tag already exists the job fails; it never
+# overwrites a tag. A run that merges nothing makes no release. The app's own version number
+# (apps/cli, apps/desktop, SOURCE_VERSION) stays upstream's and is never touched.
+# The release script asks the cooldown rule again, about everything that was merged since
+# the last release: a sync that was merged by hand before its 48 hours were over, with a
+# merge commit, squashed or rebased, is not released, by this job or by anyone running the
+# script, until the owner waives it. The job then fails and says so.
+#
+# The cooldown on every path (docs/codeharden-sync-cooldown.md)
+#   - On the pull request: the commit status "Sync cooldown", written by the "Sync cooldown
+#     report" workflow (sync-cooldown.yml) every hour and when a label changes, and by the
+#     merge job for the pull requests it looks at.
+#   - Here: conditions 3 and 4.
+#   - At the release: scripts/harden/release.sh refuses to ship upstream commits whose pull
+#     request had not waited when it was merged.
+#   - Around it: only the owner's waiver.
+#
+# Security of this workflow
+#   - Permissions are the minimum: contents: write (push main, merge, push the release
+#     commit and tag), pull-requests: write (merge), checks: read (read the check results),
+#     actions: read (read the waiver runs and who approved them), statuses: write (the merge
+#     job, to show its cooldown answer on the pull request). The release job reads pull
+#     requests and waiver runs and writes contents only. Nothing else.
+#   - It uses no actions at all, only `git`, `gh` and `jq` from the runner image, so there is
+#     nothing to pin. If an action is ever added here, pin it by full commit SHA.
+#   - It never checks out or runs code from a pull request. Commits are fetched into a bare
+#     repository as data, only to compare ancestry. The release job checks out eight files
+#     of harden and nothing else: VERSION, the changelog, state/upstream-base,
+#     scripts/harden/release.sh, the configuration it sources (fork-config.sh) and the
+#     cooldown scripts (COOLDOWN_SCRIPTS), of which it runs sync-cooldown-release.sh and
+#     sync-cooldown.sh. The merge job takes the same scripts out of harden's commit without a
+#     checkout. Those scripts, from harden itself, are the only things run from the
+#     repository; they are the same ones a maintainer runs by hand.
+#   - It authenticates with the run's own GITHUB_TOKEN. No personal tokens, no secrets.
+#   - Values from pull requests (branch names, labels) reach the scripts as data through `jq`
+#     and environment variables, never through `${{ }}` in a script. The same goes for the
+#     repository variables: they arrive through `env:`, and the job "config" refuses any that
+#     is not shaped like an owner/repo, a branch name or an npm package name before another
+#     job uses it.
+#
+# Known limit: GITHUB_TOKEN may not create or change files in .github/workflows. When
+# upstream changes a workflow file, the mirror push and the merge of that sync pull request
+# are refused; the log says so, and the repository owner does that one by hand.
+on:
+  schedule:
+    - cron: "0 13 * * *"
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Make a release even if this run merges nothing (after a sync pull request was merged by hand)
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: upstream-sync-merge
+  cancel-in-progress: false
+
+env:
+  HEAD_PREFIX: sync/
+  APPROVED_LABEL: sync-approved
+  BLOCKING_LABELS: sync-needs-review sync-hold
+  CHANGELOG_FILE: CODEHARDEN-CHANGELOG.md
+  CHANGELOG_TITLE: "# CodeHarden releases"
+  BASE_FILE: state/upstream-base
+  RELEASE_SCRIPT: scripts/harden/release.sh
+  FORK_CONFIG_SCRIPT: scripts/harden/fork-config.sh
+  # The cooldown rule and what asks it (space separated). The number of hours and the label
+  # that starts them are written in the first one, and nowhere in this file.
+  COOLDOWN_SCRIPTS: scripts/harden/sync-cooldown.sh scripts/harden/sync-cooldown-report.sh scripts/harden/sync-cooldown-release.sh
+  # Paths a sync pull request may not change and still merge by itself (space separated).
+  # The last three are what a release writes: where the last release was and which upstream
+  # commit it contained are read from them, so a sync never changes them by itself. (The
+  # release job's own commit is a push, not a sync pull request: this rule is not about it.)
+  PROTECTED_PATHS: scripts/harden/ .github/workflows/harden-desktop.yml .github/workflows/sync-cooldown.yml .github/workflows/sync-waiver.yml apps/desktop/scripts/ apps/desktop/electron-builder.config.mjs VERSION CODEHARDEN-CHANGELOG.md state/
+  REVIEW_LABEL: sync-needs-review
+  RELEASE_TZ: America/New_York
+
+jobs:
+  config:
+    name: Read the fork's configuration
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      upstream_repo: ${{ steps.config.outputs.upstream_repo }}
+      upstream_branch: ${{ steps.config.outputs.upstream_branch }}
+      package_name: ${{ steps.config.outputs.package_name }}
+      mirror_branch: ${{ steps.config.outputs.mirror_branch }}
+      target_branch: ${{ steps.config.outputs.target_branch }}
+    steps:
+      - name: Check the repository variables
+        id: config
+        shell: bash
+        env:
+          VAR_UPSTREAM_REPO: ${{ vars.UPSTREAM_REPO }}
+          VAR_UPSTREAM_BRANCH: ${{ vars.UPSTREAM_BRANCH }}
+          VAR_PACKAGE_NAME: ${{ vars.PACKAGE_NAME }}
+          VAR_MIRROR_BRANCH: ${{ vars.MIRROR_BRANCH }}
+          VAR_HARDEN_BRANCH: ${{ vars.HARDEN_BRANCH }}
+        run: |
+          set -euo pipefail
+          # fork-config:begin
+          # The same rules as scripts/harden/fork-config.sh (a test compares the two).
+          bad=0
+          problem() { echo "::error::$1"; bad=1; }
+          own=0
+          if [ "$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')" = "harperaa/codeharden" ]; then own=1; fi
+          # A variable's value, or CodeHarden's (only in CodeHarden itself).
+          value() {
+            if [ -n "$2" ]; then printf '%s' "$2"; elif [ "$own" = 1 ]; then printf '%s' "$3"; fi
+          }
+          upstream_repo=$(value UPSTREAM_REPO "$VAR_UPSTREAM_REPO" leonvanzyl/codeden)
+          upstream_branch=$(value UPSTREAM_BRANCH "$VAR_UPSTREAM_BRANCH" main)
+          package_name=$(value PACKAGE_NAME "$VAR_PACKAGE_NAME" codeharden)
+          target_branch="${VAR_HARDEN_BRANCH:-harden}"
+          mirror_branch="$VAR_MIRROR_BRANCH"
+          if [ -z "$mirror_branch" ]; then
+            if [ "$upstream_branch" = "$target_branch" ]; then mirror_branch=mirror; else mirror_branch="$upstream_branch"; fi
+          fi
+          for name in UPSTREAM_REPO UPSTREAM_BRANCH PACKAGE_NAME; do
+            case "$name" in
+              UPSTREAM_REPO) v="$upstream_repo" ;;
+              UPSTREAM_BRANCH) v="$upstream_branch" ;;
+              PACKAGE_NAME) v="$package_name" ;;
+            esac
+            if [ -z "$v" ]; then
+              problem "The repository variable ${name} is not set. This repository is ${GITHUB_REPOSITORY}, not harperaa/codeharden, so CodeHarden's value is not used. Run scripts/harden/setup-fork.sh, or create the variable under Settings > Secrets and variables > Actions > Variables."
+            fi
+          done
+          valid_repo() {
+            [[ "$1" =~ ^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?/[A-Za-z0-9._-]+$ ]] || return 1
+            case "${1#*/}" in . | ..) return 1 ;; esac
+          }
+          valid_branch() {
+            [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]] || return 1
+            case "$1" in *..* | *//* | */ | *. | *.lock | */.*) return 1 ;; esac
+          }
+          valid_package() {
+            [[ "$1" =~ ^(@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$ ]]
+          }
+          # Values are not echoed back when malformed: only their names.
+          if [ -n "$upstream_repo" ] && ! valid_repo "$upstream_repo"; then
+            problem "The repository variable UPSTREAM_REPO must be a GitHub owner/repo."
+          fi
+          if [ -n "$upstream_branch" ] && ! valid_branch "$upstream_branch"; then
+            problem "The repository variable UPSTREAM_BRANCH must be a branch name."
+          fi
+          if [ -n "$package_name" ] && ! valid_package "$package_name"; then
+            problem "The repository variable PACKAGE_NAME must be an npm package name."
+          fi
+          if ! valid_branch "$target_branch"; then
+            problem "The repository variable HARDEN_BRANCH must be a branch name."
+          fi
+          if [ -n "$mirror_branch" ] && ! valid_branch "$mirror_branch"; then
+            problem "The repository variable MIRROR_BRANCH must be a branch name."
+          fi
+          if [ "$bad" = 0 ] && [ "$mirror_branch" = "$target_branch" ]; then
+            problem "The mirror branch and the working branch are both ${target_branch}; they must differ (MIRROR_BRANCH, HARDEN_BRANCH)."
+          fi
+          if [ "$bad" = 0 ] && [ "$(printf '%s' "$upstream_repo" | tr '[:upper:]' '[:lower:]')" = "$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')" ]; then
+            problem "UPSTREAM_REPO is this repository itself."
+          fi
+          [ "$bad" = 0 ] || exit 1
+          # fork-config:end
+          echo "Upstream: ${upstream_repo} @ ${upstream_branch}; mirror branch: ${mirror_branch}; working branch: ${target_branch}; package: ${package_name}"
+          {
+            echo "upstream_repo=${upstream_repo}"
+            echo "upstream_branch=${upstream_branch}"
+            echo "package_name=${package_name}"
+            echo "mirror_branch=${mirror_branch}"
+            echo "target_branch=${target_branch}"
+          } >> "$GITHUB_OUTPUT"
+
+  mirror:
+    name: Mirror upstream main
+    needs: config
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      UPSTREAM_REPO: ${{ needs.config.outputs.upstream_repo }}
+      UPSTREAM_BRANCH: ${{ needs.config.outputs.upstream_branch }}
+      MIRROR_BRANCH: ${{ needs.config.outputs.mirror_branch }}
+    steps:
+      - name: Fast-forward main to upstream main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          fork_url="https://github.com/${GITHUB_REPOSITORY}"
+          UPSTREAM_URL="https://github.com/${UPSTREAM_REPO}"
+          git init --quiet --bare "$RUNNER_TEMP/mirror.git"
+          cd "$RUNNER_TEMP/mirror.git"
+          git fetch --quiet --no-tags "$UPSTREAM_URL" "refs/heads/${UPSTREAM_BRANCH}:refs/sync/upstream"
+          git fetch --quiet --no-tags "$fork_url" "refs/heads/${MIRROR_BRANCH}:refs/sync/mirror"
+          upstream=$(git rev-parse refs/sync/upstream)
+          mirror=$(git rev-parse refs/sync/mirror)
+          echo "upstream ${UPSTREAM_BRANCH}: $upstream"
+          echo "this repository's ${MIRROR_BRANCH}: $mirror"
+          if [ "$upstream" = "$mirror" ]; then
+            echo "::notice::${MIRROR_BRANCH} is already at upstream ($upstream)."
+            exit 0
+          fi
+          if ! git merge-base --is-ancestor "$mirror" "$upstream"; then
+            echo "::error::${MIRROR_BRANCH} can't be fast-forwarded: it has commits that upstream ${UPSTREAM_BRANCH} doesn't have ($mirror is not an ancestor of $upstream). ${MIRROR_BRANCH} must stay a pure mirror; nothing was changed. Move those commits to another branch and reset ${MIRROR_BRANCH} by hand."
+            exit 1
+          fi
+          # A plain push, never forced: git itself refuses anything that isn't a fast-forward.
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          if ! git -c "http.extraheader=AUTHORIZATION: basic $auth" \
+            push "$fork_url" "refs/sync/upstream:refs/heads/${MIRROR_BRANCH}" 2> "$RUNNER_TEMP/push.log"; then
+            cat "$RUNNER_TEMP/push.log"
+            if grep -qi "workflow" "$RUNNER_TEMP/push.log"; then
+              echo "::error::The push was refused because upstream changed a file in .github/workflows, which GITHUB_TOKEN may not do. Fast-forward ${MIRROR_BRANCH} by hand: git fetch $UPSTREAM_URL ${UPSTREAM_BRANCH} && git push $fork_url FETCH_HEAD:refs/heads/${MIRROR_BRANCH}"
+            else
+              echo "::error::Pushing ${MIRROR_BRANCH} failed. If the message above is a permission error, check Settings > Actions > General > Workflow permissions (the workflow asks for contents: write itself) and any branch protection or ruleset on ${MIRROR_BRANCH}."
+            fi
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/push.log"
+          echo "::notice::Fast-forwarded ${MIRROR_BRANCH} from $mirror to $upstream."
+
+  merge:
+    name: Merge approved sync pull requests
+    needs: config
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: read
+      # The cooldown: the waiver runs and who approved them (read), and the answer shown on
+      # the pull request as the commit status "Sync cooldown" (write).
+      actions: read
+      statuses: write
+    env:
+      UPSTREAM_REPO: ${{ needs.config.outputs.upstream_repo }}
+      UPSTREAM_BRANCH: ${{ needs.config.outputs.upstream_branch }}
+      TARGET_BRANCH: ${{ needs.config.outputs.target_branch }}
+      # For the cooldown scripts (scripts/harden/fork-config.sh): the same values, already
+      # checked by the job "config", and no lookup of repository variables.
+      HARDEN_BRANCH: ${{ needs.config.outputs.target_branch }}
+      FORK_CONFIG_NO_GH: "1"
+      SYNC_WAIVER_APPROVERS: ${{ vars.SYNC_WAIVER_APPROVERS }}
+      SYNC_COOLDOWN_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    outputs:
+      merged: ${{ steps.merge.outputs.merged }}
+    steps:
+      - name: Merge sync pull requests approved at least 48 hours ago
+        id: merge
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          fork_url="https://github.com/${repo}"
+          UPSTREAM_URL="https://github.com/${UPSTREAM_REPO}"
+          failed=0
+          merged=0
+
+          skip() { echo "  SKIP #$number: $1"; }
+          # protected-paths:begin
+          # The protected paths a commit changes against the target branch, one per line.
+          touches_protected() {
+            # shellcheck disable=SC2086 # PROTECTED_PATHS is a list of paths
+            git diff --name-only "refs/sync/target...$1" -- $PROTECTED_PATHS
+          }
+          # protected-paths:end
+
+          gh api --paginate "repos/${repo}/pulls?state=open&base=${TARGET_BRANCH}&per_page=100" \
+            --jq '.[] | @base64' > "$RUNNER_TEMP/pulls.txt"
+          prs=()
+          while IFS= read -r row; do
+            ref=$(printf '%s' "$row" | base64 -d | jq -r '.head.ref')
+            case "$ref" in "${HEAD_PREFIX}"*) prs+=("$row") ;; esac
+          done < "$RUNNER_TEMP/pulls.txt"
+
+          echo "Open pull requests into ${TARGET_BRANCH}: $(wc -l < "$RUNNER_TEMP/pulls.txt" | tr -d ' '); with a ${HEAD_PREFIX} head branch: ${#prs[@]}"
+          if [ "${#prs[@]}" -eq 0 ]; then
+            echo "::notice::No open sync pull requests into ${TARGET_BRANCH}. Nothing to merge."
+            echo "merged=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Commits as data, for ancestry only. Nothing is checked out and nothing is run.
+          git init --quiet --bare "$RUNNER_TEMP/sync.git"
+          cd "$RUNNER_TEMP/sync.git"
+          git remote add origin "$fork_url"
+          git fetch --quiet --no-tags "$UPSTREAM_URL" "refs/heads/${UPSTREAM_BRANCH}:refs/sync/upstream"
+          git fetch --quiet --no-tags "$fork_url" "refs/heads/${TARGET_BRANCH}:refs/sync/target"
+          # The cooldown rule, from the target branch itself: the scripts a maintainer runs.
+          mkdir -p "$RUNNER_TEMP/harden"
+          for script in $FORK_CONFIG_SCRIPT $COOLDOWN_SCRIPTS; do
+            if ! git show "refs/sync/target:${script}" > "$RUNNER_TEMP/harden/${script##*/}"; then
+              echo "::error::${TARGET_BRANCH} has no ${script}; nothing is merged without the cooldown rule."; exit 1
+            fi
+          done
+
+          for row in "${prs[@]}"; do
+            pr=$(printf '%s' "$row" | base64 -d)
+            number=$(jq -r '.number' <<< "$pr")
+            head_ref=$(jq -r '.head.ref' <<< "$pr")
+            head_sha=$(jq -r '.head.sha' <<< "$pr")
+            head_repo=$(jq -r '.head.repo.full_name // ""' <<< "$pr")
+            labels=$(jq -r '[.labels[].name] | join(" ")' <<< "$pr")
+            echo "#$number  ${head_ref} @ ${head_sha}  labels: ${labels:-none}"
+            if ! [[ "$number" =~ ^[0-9]+$ && "$head_sha" =~ ^[0-9a-f]{40}$ ]]; then
+              skip "unexpected pull request data."; continue
+            fi
+
+            # 1. Same repository.
+            if [ "$head_repo" != "$repo" ]; then
+              skip "its head branch is in ${head_repo:-a deleted repository}, not in ${repo}."; continue
+            fi
+
+            # 2. Labels.
+            if ! jq -e --arg l "$APPROVED_LABEL" 'any(.labels[]; .name == $l)' <<< "$pr" > /dev/null; then
+              skip "it doesn't have the label ${APPROVED_LABEL}."; continue
+            fi
+            blocked=""
+            for l in $BLOCKING_LABELS; do
+              if jq -e --arg l "$l" 'any(.labels[]; .name == $l)' <<< "$pr" > /dev/null; then blocked="$l"; fi
+            done
+            if [ -n "$blocked" ]; then
+              skip "it has the label ${blocked}."; continue
+            fi
+
+            # Its head commit, as data: the cooldown rule and condition 5 compare ancestry.
+            if ! git fetch --quiet --no-tags "$fork_url" "$head_sha" 2> /dev/null; then
+              skip "its head commit couldn't be fetched."; failed=1; continue
+            fi
+
+            # 3 and 4. The cooldown: approved at least 48 hours ago with no push since, or
+            # waived by the owner. The rule answers; the same call writes the answer on the
+            # pull request as the status "Sync cooldown". Anything but a clear yes is a no.
+            code=0
+            verdict=$(bash "$RUNNER_TEMP/harden/sync-cooldown-report.sh" pull-request "$number" --head "$head_sha" \
+              --upstream-ref refs/sync/upstream --target-ref refs/sync/target) || code=$?
+            cooldown_state=$(sed -n 's/^state: //p' <<< "$verdict")
+            cooldown=$(sed -n 's/^detail: //p' <<< "$verdict")
+            if [ "$code" = 1 ]; then
+              skip "its cooldown is not over (${cooldown_state}). ${cooldown}"; continue
+            fi
+            if [ "$code" != 0 ] || { [ "$cooldown_state" != "satisfied" ] && [ "$cooldown_state" != "waived" ]; }; then
+              skip "its cooldown couldn't be evaluated. ${cooldown}"; failed=1; continue
+            fi
+            echo "  cooldown ${cooldown_state}: ${cooldown}"
+
+            # 5. Upstream code only (plus a merge with the target branch).
+            if git merge-base --is-ancestor "$head_sha" refs/sync/upstream; then
+              echo "  head is a commit on upstream ${UPSTREAM_BRANCH}"
+            else
+              read -r -a parents <<< "$(git rev-list --parents -n 1 "$head_sha" | cut -d' ' -f2-)"
+              if [ "${#parents[@]}" -ne 2 ]; then
+                skip "its head is not on upstream ${UPSTREAM_BRANCH} and is not a two-parent merge."; continue
+              fi
+              if ! git merge-base --is-ancestor "${parents[0]}" refs/sync/upstream; then
+                skip "its head is a merge whose first parent (${parents[0]}) is not on upstream ${UPSTREAM_BRANCH}."; continue
+              fi
+              if ! git merge-base --is-ancestor "${parents[1]}" refs/sync/target; then
+                skip "its head is a merge whose second parent (${parents[1]}) is not on ${TARGET_BRANCH}."; continue
+              fi
+              echo "  head is a merge of upstream ${parents[0]} with ${TARGET_BRANCH} ${parents[1]}"
+            fi
+
+            # 6. This fork's own release scripts are not changed by a sync.
+            if ! touched=$(touches_protected "$head_sha"); then
+              skip "its changes against ${TARGET_BRANCH} couldn't be listed."; failed=1; continue
+            fi
+            if [ -n "$touched" ]; then
+              gh api -X POST "repos/${repo}/issues/${number}/labels" -f "labels[]=${REVIEW_LABEL}" > /dev/null \
+                || echo "  (couldn't add the label ${REVIEW_LABEL})"
+              echo "::notice::Sync pull request #$number changes $(tr '\n' ' ' <<< "$touched"); it is left for a manual merge (${REVIEW_LABEL})."
+              skip "it changes protected paths: $(tr '\n' ' ' <<< "$touched")"; continue
+            fi
+
+            # 7. Checks and mergeability.
+            if ! checks=$(gh api --paginate "repos/${repo}/commits/${head_sha}/check-runs?filter=latest&per_page=100" \
+              --jq '.check_runs[] | "\(.status) \(.conclusion // "none") \(.name)"'); then
+              skip "its checks couldn't be read."; failed=1; continue
+            fi
+            if [ -z "$checks" ]; then
+              skip "its head commit has no checks yet."; continue
+            fi
+            bad=$(grep -vE '^completed (success|skipped|neutral) ' <<< "$checks" || true)
+            if [ -n "$bad" ]; then
+              skip "not every check has passed: $(tr '\n' ';' <<< "$bad")"; continue
+            fi
+            mergeable="null"; state=""
+            # Up to two minutes: GitHub works mergeability out after it is asked, and takes
+            # a while to count a status that was just written.
+            for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13; do
+              detail=$(gh api "repos/${repo}/pulls/${number}")
+              mergeable=$(jq -r '.mergeable' <<< "$detail")
+              state=$(jq -r '.mergeable_state' <<< "$detail")
+              current_sha=$(jq -r '.head.sha' <<< "$detail")
+              # "unstable" is a status on the head that is not green; the cooldown's own
+              # status may have been written a moment ago, so that one is asked again too.
+              [ "$mergeable" != "null" ] && [ "$state" != "unstable" ] && break
+              sleep 10
+            done
+            if [ "$current_sha" != "$head_sha" ]; then
+              skip "its head changed during this run."; continue
+            fi
+            if [ "$mergeable" != "true" ] || { [ "$state" != "clean" ] && [ "$state" != "has_hooks" ]; }; then
+              skip "GitHub doesn't report it as mergeable (mergeable: ${mergeable}, state: ${state})."; continue
+            fi
+
+            echo "  MERGE #$number: cooldown ${cooldown_state}, checks passed, mergeable."
+            if gh pr merge "$number" --repo "$repo" --merge --match-head-commit "$head_sha" 2> "$RUNNER_TEMP/merge.log"; then
+              merged=$((merged + 1))
+              echo "::notice::Merged sync pull request #$number (${head_ref} @ ${head_sha}) into ${TARGET_BRANCH}; cooldown ${cooldown_state}."
+            else
+              cat "$RUNNER_TEMP/merge.log"
+              failed=1
+              if grep -qi "workflow" "$RUNNER_TEMP/merge.log"; then
+                echo "::error::#$number passed every rule but changes a file in .github/workflows, which GITHUB_TOKEN may not merge. Merge it by hand with a merge commit."
+              else
+                echo "::error::#$number passed every rule but the merge failed. If the message above is a permission error, check that merge commits are allowed (Settings > General > Pull Requests) and any branch protection or ruleset on ${TARGET_BRANCH}."
+              fi
+            fi
+          done
+
+          echo "Merged: $merged"
+          echo "merged=$merged" >> "$GITHUB_OUTPUT"
+          exit "$failed"
+
+  release:
+    name: Release CodeHarden
+    needs: [config, merge]
+    # Also after a merge job that failed on one pull request but merged another.
+    if: ${{ always() && needs.config.result == 'success' && (needs.merge.outputs.merged > 0 || (github.event_name == 'workflow_dispatch' && inputs.release)) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      # The release script asks the cooldown rule about the pull request that brought the
+      # upstream commits in (its labels' times, its head branch's pushes) and about waivers.
+      pull-requests: read
+      actions: read
+    env:
+      UPSTREAM_REPO: ${{ needs.config.outputs.upstream_repo }}
+      UPSTREAM_BRANCH: ${{ needs.config.outputs.upstream_branch }}
+      TARGET_BRANCH: ${{ needs.config.outputs.target_branch }}
+      HARDEN_BRANCH: ${{ needs.config.outputs.target_branch }}
+      SYNC_WAIVER_APPROVERS: ${{ vars.SYNC_WAIVER_APPROVERS }}
+    steps:
+      - name: Write VERSION and the changelog, commit, tag and push
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          fork_url="https://github.com/${GITHUB_REPOSITORY}"
+          git init --quiet "$RUNNER_TEMP/release"
+          cd "$RUNNER_TEMP/release"
+          git remote add origin "$fork_url"
+          git fetch --quiet --no-tags origin "refs/heads/${TARGET_BRANCH}:refs/remotes/origin/${TARGET_BRANCH}"
+          # Only the three release files, the release script and the scripts it runs or
+          # sources (the configuration and the cooldown rule) reach the working tree. The
+          # scripts are the ones a maintainer runs by hand after merging our own changes.
+          paths=("/VERSION" "/${CHANGELOG_FILE}" "/${BASE_FILE}")
+          for script in $RELEASE_SCRIPT $FORK_CONFIG_SCRIPT $COOLDOWN_SCRIPTS; do paths+=("/${script}"); done
+          git sparse-checkout set --no-cone "${paths[@]}"
+          git checkout --quiet -B "$TARGET_BRANCH" "refs/remotes/origin/${TARGET_BRANCH}"
+          for script in $RELEASE_SCRIPT $FORK_CONFIG_SCRIPT $COOLDOWN_SCRIPTS; do
+            if [ ! -f "$script" ]; then
+              echo "::error::${TARGET_BRANCH} has no ${script}; can't make a release."; exit 1
+            fi
+          done
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$auth"
+          # The credential lives in this checkout's config only while the script runs, and is
+          # sent to this repository only: the script also fetches upstream's branch, which
+          # needs none and gets none.
+          trap 'git config --unset-all "http.${fork_url}.extraheader" || true' EXIT
+          git config "http.${fork_url}.extraheader" "AUTHORIZATION: basic $auth"
+          # Writes VERSION, the changelog entry and the upstream base, commits, tags and pushes
+          # both in one atomic push, never forced. It fails if the tag already exists, and
+          # when a sync in this release was merged before its cooldown was over and the
+          # owner has not waived it: then nothing is written and the job says which sync.
+          # The script fetches upstream's branch itself, and finds the last release from the
+          # release tags of this repository.
+          bash "$RELEASE_SCRIPT" --push
+          echo "::notice::Released CodeHarden $(cat VERSION) on ${TARGET_BRANCH}."

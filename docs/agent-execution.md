@@ -78,7 +78,7 @@ So a prompt-injected agent at Auto can read the user's subscription logins into 
 | Windows and macOS | Native | Native | Needs Docker Desktop (a paid subscription in larger companies) or Docker Engine; Linux containers only | Required for everyone |
 | Startup, disk, RAM | A worktree per session | Plus a small home folder per session (a new Codex home holds five SQLite databases) | Plus an image (about 1.94 GB in the remote-runners spike), a clone per session, and the Docker VM's RAM | The same as C, for every session |
 | Offline | Works (model calls aside; local models through OpenCode work) | Works | Works once the image is built | First run needs the network for the image |
-| `npx codeden` and desktop first run | Under a minute (§14) | Unchanged | Unchanged until a project opts in | Install Docker, then build an image |
+| `npx codeharden` and desktop first run | Under a minute (§14) | Unchanged | Unchanged until a project opts in | Install Docker, then build an image |
 | Browser | The runner's Chromium, and native views in the desktop app | The same | Chromium in the container, screencast only (remote-runners §12) | Screencast only, always |
 | Terminals | node-pty on the host | The same | node-pty in the container, over the link | The same as C |
 | Computer use | Browser pointer actions | The same | The same, plus a later virtual desktop in the image (dedicated agent computers) | The same as C |

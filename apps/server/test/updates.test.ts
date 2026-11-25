@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { HARDEN_PACKAGE_NAME } from "@codeden/contracts";
 import type { ResolvedCommand } from "@codeden/providers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -40,7 +41,7 @@ const registry = (latest: string | null) => {
 function fakeInstall(home: string, version: string): void {
   const root = packageRoot(home, version);
   mkdirSync(join(root, "dist", "web"), { recursive: true });
-  writeFileSync(join(root, "package.json"), JSON.stringify({ name: "codeden", version }));
+  writeFileSync(join(root, "package.json"), JSON.stringify({ name: HARDEN_PACKAGE_NAME, version }));
   for (const f of ["dist/cli.js", "dist/runner.js", "dist/web/index.html"]) {
     writeFileSync(join(root, f), "");
   }
@@ -83,7 +84,7 @@ describe("update check (§16)", () => {
       error: null,
     });
     await s.status();
-    expect(r.calls).toEqual([`${REGISTRY}/-/package/codeden/dist-tags`]);
+    expect(r.calls).toEqual([`${REGISTRY}/-/package/${HARDEN_PACKAGE_NAME}/dist-tags`]);
     await s.status({ refresh: true });
     expect(r.calls).toHaveLength(2);
     now += 7 * 3600_000;
@@ -161,7 +162,7 @@ describe("one-click self-update (§16)", () => {
     expect(s.snapshot().installError).toContain("E404");
     expect(readPointer(home)).toBeNull();
     const dev = new UpdateService({ home, mode: () => "notify", registry: REGISTRY });
-    expect(() => dev.install({ version: "0.2.0" })).toThrow(/running CodeDen from source/);
+    expect(() => dev.install({ version: "0.2.0" })).toThrow(/running CodeHarden from source/);
   });
 
   it("auto mode installs in the background for the next launch", async () => {
@@ -252,10 +253,16 @@ describe("side-by-side installs", () => {
     expect(calls).toHaveLength(1);
     const args = JSON.parse(calls[0] ?? "[]") as string[];
     expect(args).toEqual(
-      expect.arrayContaining(["install", "codeden@0.2.0", "--omit=dev", "--no-audit", "--no-fund"]),
+      expect.arrayContaining([
+        "install",
+        `${HARDEN_PACKAGE_NAME}@0.2.0`,
+        "--omit=dev",
+        "--no-audit",
+        "--no-fund",
+      ]),
     );
     expect(args.slice(-2)).toEqual(["--registry", REGISTRY]);
-    expect(progress).toContain("Installed codeden@0.2.0");
+    expect(progress).toContain(`Installed ${HARDEN_PACKAGE_NAME}@0.2.0`);
     // Already installed: npm is not run again.
     await installAppVersion({ home, version: "0.2.0", npm: fakeNpm });
     expect(

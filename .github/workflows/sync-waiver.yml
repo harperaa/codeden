@@ -1,0 +1,181 @@
+name: Waive sync cooldown
+# The run's title is the waiver's text: scripts/harden/sync-cooldown.sh finds a waiver by
+# exactly this title (a test keeps the two the same). Don't reword it.
+run-name: "Waive sync cooldown: upstream ${{ inputs.upstream }}, pull request ${{ inputs.pull-request || 'none' }}, commit ${{ inputs.commit }}"
+
+# Lets one upstream commit ship before its 48 hours are over (docs/codeharden-sync-cooldown.md).
+#
+# This fork's own workflow, and the only way around the cooldown. Upstream changes are merged
+# 48 hours after they are approved; the sync workflow's merge job, the pull request's "Sync
+# cooldown" status and scripts/harden/release.sh all ask one rule
+# (scripts/harden/sync-cooldown.sh) and none of them has a switch. When the owner decides
+# that a change can't wait (a security fix, say), they run this workflow. It never starts by
+# itself: a person runs it (Actions > Waive sync cooldown > Run workflow, on the default
+# branch).
+#
+#   upstream      the upstream commit to waive, its full id: the newest upstream commit the
+#                 sync brings.
+#   pull-request  the number of the pull request that brings it. Empty only for upstream
+#                 commits that reached the working branch without a pull request.
+#   commit        the pull request's head commit, its full id. The waiver is for exactly that
+#                 head: after a push to the branch it no longer applies. Without a pull
+#                 request: the commit of the working branch that brought the upstream commit
+#                 in.
+# A refused release prints all three; the report workflow's run summary names a pull
+# request's upstream commit, and its head is on the pull request's page.
+#
+# Approval. The job "waive" uses the GitHub environment `sync-waiver`, which the owner
+# protects with "Required reviewers" (Settings > Environments). GitHub starts that job only
+# after a reviewer pressed "Review deployments" on the run's page. The environment holds no
+# secret; it exists for that one approval.
+#
+# The record. This workflow writes nothing: no tag, no file, no variable. Anything of that
+# kind could also be written by whoever can push to the repository. The waiver is the run
+# itself: a successful run of this file on the working branch whose review history
+# (GitHub's own record, `GET /repos/{owner}/{repo}/actions/runs/{run_id}/approvals`) shows
+# an approval for the environment `sync-waiver` by someone who may waive: the repository's
+# owner, or in a repository an organization owns the logins in the repository variable
+# SYNC_WAIVER_APPROVERS. That can be read by anyone who can read the repository, without a
+# secret, and it can be produced only by approving. It says who approved; the run's times say
+# when. GitHub keeps a run for the repository's retention period
+# (90 days at most), which is longer than a waiver is needed: the release that ships the
+# commit writes the waiver into its changelog entry, where it stays.
+#
+# Jobs:
+#   check  holds no approval and no write permission. Refuses when the request is malformed,
+#          when the run was not started on the working branch, when the environment is not a
+#          gate (missing: GitHub would create it on first use, with no protection; without
+#          required reviewers, or with none who may waive; open to other branches; or with
+#          the administrators' bypass on), when the upstream commit is not upstream's, or
+#          when the commit is not the pull request's head, does not bring exactly that
+#          upstream commit, or has already waited. Says what approving would waive.
+#   waive  in the environment `sync-waiver`: waits for the approval. Then it checks that
+#          GitHub recorded an approval by someone who may waive and that the pull request's
+#          head is still that commit. When it fails, the run failed, and a failed run is no
+#          waiver.
+#
+# Security of this workflow
+#   - Permissions are read-only in both jobs: contents (the pull request's head branch's
+#     pushes), pull-requests (the pull request and its label events), actions (the
+#     environment's rules, the waiver runs and their review history). Nothing is written.
+#   - It uses no actions at all, only `git` and `gh` from the runner image.
+#   - No pull request's code is checked out or run, in either job: the scripts come from the
+#     working branch itself, and commits are fetched into a bare repository as data, only to
+#     compare ancestry.
+#   - The inputs reach the script through environment variables, never through `${{ }}` in a
+#     script, and the script checks their shape first.
+#   - The limit: an approval is as strong as the reviewer's sign-in. Whoever holds a
+#     reviewer's token can approve through GitHub's API, and agent sessions on the owner's
+#     machine act with the owner's sign-in. So this is a deliberate, separate step and a
+#     record of who took it, not a cryptographic separation. Agents are instructed never to
+#     approve a run of this workflow (AGENTS.md).
+on:
+  workflow_dispatch:
+    inputs:
+      upstream:
+        description: The upstream commit to waive the cooldown for (its full 40-character id)
+        required: true
+        type: string
+      pull-request:
+        description: The number of the pull request that brings it (empty only when there is none)
+        required: false
+        type: string
+      commit:
+        description: The pull request's head commit (its full id); without a pull request, the commit that brought the upstream commit in
+        required: true
+        type: string
+
+# Nothing by default; each job asks for what it needs.
+permissions: {}
+
+concurrency:
+  group: sync-waiver-${{ inputs.upstream }}
+  cancel-in-progress: false
+
+env:
+  # The fork's names, for scripts/harden/fork-config.sh. Empty means CodeHarden's own, which
+  # only CodeHarden's repository gets; a fork without them stops with their names.
+  UPSTREAM_REPO: ${{ vars.UPSTREAM_REPO }}
+  UPSTREAM_BRANCH: ${{ vars.UPSTREAM_BRANCH }}
+  HARDEN_BRANCH: ${{ vars.HARDEN_BRANCH }}
+  FORK_CONFIG_NO_GH: "1"
+  # Who may waive, when it is not the repository's owner (a repository of an organization).
+  SYNC_WAIVER_APPROVERS: ${{ vars.SYNC_WAIVER_APPROVERS }}
+
+jobs:
+  check:
+    name: Check the request
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+      # The environment's rules, and earlier waiver runs.
+      actions: read
+    steps:
+      - name: Check the request and that the environment is a gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPSTREAM: ${{ inputs.upstream }}
+          PULL_REQUEST: ${{ inputs.pull-request }}
+          COMMIT: ${{ inputs.commit }}
+        run: |
+          set -euo pipefail
+          # harden-scripts:begin
+          # This fork's own scripts, from the working branch itself and from nowhere else: no
+          # pull request's code is checked out or run. Commits are fetched as data only.
+          branch="${HARDEN_BRANCH:-harden}"
+          if [[ ! "$branch" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]]; then
+            echo "::error::The repository variable HARDEN_BRANCH must be a branch name."; exit 1
+          fi
+          git init --quiet --bare "$RUNNER_TEMP/cooldown.git"
+          cd "$RUNNER_TEMP/cooldown.git"
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}"
+          git fetch --quiet --no-tags origin "refs/heads/${branch}:refs/sync/target"
+          mkdir -p "$RUNNER_TEMP/harden"
+          for script in fork-config.sh sync-cooldown.sh sync-cooldown-report.sh sync-waiver.sh; do
+            git show "refs/sync/target:scripts/harden/${script}" > "$RUNNER_TEMP/harden/${script}"
+          done
+          # harden-scripts:end
+          bash "$RUNNER_TEMP/harden/sync-waiver.sh" check --upstream "$UPSTREAM" --pull-request "$PULL_REQUEST" --commit "$COMMIT"
+
+  # GitHub does not start this job until a required reviewer of the environment approved it.
+  waive:
+    name: Record the waiver
+    needs: check
+    environment: sync-waiver
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+      # This run's own review history.
+      actions: read
+    steps:
+      - name: Check who approved and that the pull request did not move
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPSTREAM: ${{ inputs.upstream }}
+          PULL_REQUEST: ${{ inputs.pull-request }}
+          COMMIT: ${{ inputs.commit }}
+        run: |
+          set -euo pipefail
+          # harden-scripts:begin
+          # This fork's own scripts, from the working branch itself and from nowhere else: no
+          # pull request's code is checked out or run. Commits are fetched as data only.
+          branch="${HARDEN_BRANCH:-harden}"
+          if [[ ! "$branch" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]]; then
+            echo "::error::The repository variable HARDEN_BRANCH must be a branch name."; exit 1
+          fi
+          git init --quiet --bare "$RUNNER_TEMP/cooldown.git"
+          cd "$RUNNER_TEMP/cooldown.git"
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}"
+          git fetch --quiet --no-tags origin "refs/heads/${branch}:refs/sync/target"
+          mkdir -p "$RUNNER_TEMP/harden"
+          for script in fork-config.sh sync-cooldown.sh sync-cooldown-report.sh sync-waiver.sh; do
+            git show "refs/sync/target:scripts/harden/${script}" > "$RUNNER_TEMP/harden/${script}"
+          done
+          # harden-scripts:end
+          bash "$RUNNER_TEMP/harden/sync-waiver.sh" confirm --upstream "$UPSTREAM" --pull-request "$PULL_REQUEST" --commit "$COMMIT"

@@ -1,6 +1,7 @@
 import {
   type ActivitySummary,
   CODEDEN_VERSION,
+  HARDEN_VERSION,
   type HealthResponse,
   type InboxItem,
   type Session,
@@ -8,6 +9,7 @@ import {
   type SettingsPatch,
   type Snapshot,
   summarizeActivity,
+  UPSTREAM_VERSION,
 } from "@codeden/contracts";
 import { eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
@@ -20,6 +22,7 @@ import { sessionSnapshot } from "../services/sessions/snapshot";
 import { agentConfigRoutes, sessionAgentConfigRoutes } from "./agent-config";
 import { automationRoutes, projectAutomationRoutes } from "./automations";
 import { browserRoutes, sessionBrowserRoutes } from "./browser";
+import { devPreviewRoutes } from "./dev-preview";
 import { executionRoutes } from "./execution";
 import { factoryRoutes, projectFactoryRoutes } from "./factory";
 import { githubRoutes, projectGithubRoutes, prRoutes, sessionGithubRoutes } from "./github";
@@ -30,6 +33,7 @@ import { conflictRoutes, orchestrationRoutes } from "./orchestration";
 import { projectRoutes } from "./projects";
 import { remoteImageRoutes } from "./remote-image";
 import { searchRoutes } from "./search";
+import { secureFoundationRoutes } from "./secure-foundation";
 import { sessionFileRoutes } from "./session-files";
 import { sessionRoutes } from "./sessions";
 import { artifactRoutes, fileRoutes, providerRoutes, secretRoutes, setupRoutes } from "./system";
@@ -66,6 +70,8 @@ export function createApi(ctx: ApiContext) {
           ok: true,
           name: "codeden",
           version: CODEDEN_VERSION,
+          hardenVersion: HARDEN_VERSION,
+          upstreamVersion: UPSTREAM_VERSION,
           uptimeSec: (Date.now() - ctx.startedAt) / 1000,
         };
         return c.json(body);
@@ -77,6 +83,8 @@ export function createApi(ctx: ApiContext) {
         c.json(sessionSnapshot(s, c.req.param("id"), c.req.valid("query"))),
       )
       .route("/projects", projectRoutes(s))
+      .route("/secure-foundation", secureFoundationRoutes(s))
+      .route("/dev-preview", devPreviewRoutes(s))
       .route("/execution", executionRoutes(s))
       .route("/projects", projectGithubRoutes(s))
       .route("/projects", projectFactoryRoutes(s))
@@ -149,6 +157,8 @@ function buildSnapshot(ctx: ApiContext): Snapshot {
   return {
     seq,
     serverVersion: CODEDEN_VERSION,
+    hardenVersion: HARDEN_VERSION,
+    upstreamVersion: UPSTREAM_VERSION,
     generatedAt: new Date().toISOString(),
     settings: s.settings.get(),
     projects: s.projects.list(),

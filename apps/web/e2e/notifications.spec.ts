@@ -122,7 +122,7 @@ test("an approval chimes, badges the favicon and keeps a sticky toast until reso
   await openInbox(page);
   const icon = page.locator('link[rel~="icon"]');
   const toast = page.getByTestId("attention-toast");
-  await expect(icon).toHaveAttribute("href", "/favicon.svg");
+  await expect(icon).toHaveAttribute("href", "/harden/favicon.svg");
   // Browsers only allow audio after a gesture; any keypress unlocks it.
   await page.keyboard.press("Shift");
 
@@ -143,13 +143,13 @@ test("an approval chimes, badges the favicon and keeps a sticky toast until reso
       document.hasFocus = () => false;
       window.dispatchEvent(new Event("blur"));
     });
-    await expect(page).toHaveTitle(/^\(\d+\) ⏳ Waiting on you · CodeDen$/);
-    await expect(page).toHaveTitle(/^\(\d+\) CodeDen$/);
+    await expect(page).toHaveTitle(/^\(\d+\) ⏳ Waiting on you · CodeHarden$/);
+    await expect(page).toHaveTitle(/^\(\d+\) CodeHarden$/);
     await page.evaluate(() => {
       document.hasFocus = () => true;
       window.dispatchEvent(new Event("focus"));
     });
-    await expect(page).toHaveTitle(/^\(\d+\) CodeDen$/);
+    await expect(page).toHaveTitle(/^\(\d+\) CodeHarden$/);
   });
 
   await test.step("resolving it elsewhere dismisses the toast and restores the favicon", async () => {
@@ -157,7 +157,7 @@ test("an approval chimes, badges the favicon and keeps a sticky toast until reso
       response: { kind: "approval", decision: "allow_once" },
     });
     await expect(toast).toHaveCount(0);
-    await expect(icon).toHaveAttribute("href", "/favicon.svg");
+    await expect(icon).toHaveAttribute("href", "/harden/favicon.svg");
     await expect(icon).not.toHaveAttribute("data-attention");
   });
 
@@ -178,6 +178,6 @@ test("Open goes straight to the waiting session", async ({ page }) => {
   await api(page, "POST", `/inbox/${approval.id}/resolve`, {
     response: { kind: "approval", decision: "allow_once" },
   });
-  await expect(icon).toHaveAttribute("href", "/favicon.svg");
+  await expect(icon).toHaveAttribute("href", "/harden/favicon.svg");
   await api(page, "POST", `/sessions/${sessionId}/stop`, {});
 });

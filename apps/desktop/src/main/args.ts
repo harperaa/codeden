@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { DEEP_LINK_SCHEME } from "@codeden/contracts";
+import { DEEP_LINK_SCHEME, HARDEN_DEFAULT_PORT, HARDEN_HOME_DIRNAME } from "@codeden/contracts";
 
 /** What the app was started with. */
 export interface LaunchArgs {
@@ -16,7 +16,7 @@ export interface LaunchArgs {
   deepLink: string | null;
 }
 
-export const DEFAULT_PORT = 4317;
+export const DEFAULT_PORT = HARDEN_DEFAULT_PORT;
 
 /**
  * Parse the app's command line. Chromium and Electron switches (`--inspect`, `--no-sandbox`,
@@ -46,7 +46,7 @@ export function parseLaunchArgs(
   }
   const chosen = explicitHome ?? env.CODEDEN_HOME;
   return {
-    home: chosen ? resolve(chosen) : join(home, ".codeden"),
+    home: chosen ? resolve(chosen) : join(home, HARDEN_HOME_DIRNAME),
     port,
     hidden,
     fake: fake || env.CODEDEN_FAKE_PROVIDER === "1",

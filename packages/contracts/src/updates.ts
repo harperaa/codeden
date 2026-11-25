@@ -54,7 +54,7 @@ export const UpdateStatus = z.object({
   checkedAt: Timestamp.nullable(),
   /** Why the last check failed (offline, registry error), else null. */
   error: z.string().nullable(),
-  /** The manual way to update, e.g. `npm i -g codeden@latest`. */
+  /** The manual way to update, `HARDEN_INSTALL_COMMAND` (`npm i -g <package>@latest`). */
   command: z.string(),
   source: InstallSource,
   state: UpdateState,

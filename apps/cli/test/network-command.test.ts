@@ -1,7 +1,7 @@
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { RemoteAccessFile } from "@codeden/contracts";
+import { HARDEN_COMMAND, RemoteAccessFile } from "@codeden/contracts";
 import {
   ensureHome,
   ensureInstallToken,
@@ -32,7 +32,7 @@ const file = () => join(home, "remote-access.json");
 describe("codeden network / password (server stopped)", () => {
   it("refuses to turn network access on before a password is set", async () => {
     expect(await networkCommand(home, "on")).toBe(1);
-    expect(out.join("\n")).toMatch(/codeden password/);
+    expect(out.join("\n")).toContain(`${HARDEN_COMMAND} password`);
     expect(await networkCommand(home, "sideways")).toBe(2);
   });
 
@@ -46,7 +46,7 @@ describe("codeden network / password (server stopped)", () => {
 
     expect(await networkCommand(home, "on")).toBe(0);
     expect(RemoteAccessFile.parse(JSON.parse(readFileSync(file(), "utf8"))).enabled).toBe(true);
-    expect(out.join("\n")).toMatch(/localhost:4317/);
+    expect(out.join("\n")).toMatch(/localhost:4417/);
     expect(await networkCommand(home, undefined)).toBe(0);
     expect(out.join("\n")).toMatch(/is on/);
     expect(await networkCommand(home, "off")).toBe(0);

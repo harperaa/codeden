@@ -7,7 +7,7 @@ body:
       value: |
         Thanks for reporting! The more detail you provide, the faster it can be fixed.
 
-        **Found a security problem?** Please don't file it here. Issues are public. Report it privately as [SECURITY.md](https://github.com/leonvanzyl/codeden/blob/main/SECURITY.md) describes: <https://github.com/leonvanzyl/codeden/security/advisories/new>.
+        **Found a security problem?** Please don't file it here. Issues are public. Report it privately as [SECURITY.md](https://github.com/harperaa/codeharden/blob/harden/SECURITY.md) describes: <https://github.com/harperaa/codeharden/security/advisories/new>.
 
   - type: textarea
     id: description
@@ -78,7 +78,7 @@ body:
     attributes:
       label: How do you run CodeDen?
       options:
-        - npx codeden / npm install
+        - npx codeharden / npm install
         - Desktop app
         - Source checkout (pnpm dev)
     validations:
@@ -99,9 +99,9 @@ body:
   - type: textarea
     id: environment
     attributes:
-      label: "`codeden doctor` output"
+      label: "`codeharden doctor` output"
       description: |
-        Run `npx codeden doctor` and paste what it prints. It shows the CodeDen, Node and git versions and the state of each agent provider.
+        Run `npx codeharden doctor` and paste what it prints. It shows the CodeDen, Node and git versions and the state of each agent provider.
         In the desktop app, give the version from **Settings > About** instead.
       render: shell
     validations:
@@ -114,7 +114,7 @@ body:
       description: |
         Paste the relevant lines. Where to look:
         - Runner output: the end of `~/.codeden/logs/runner.log`
-        - Server log lines: run with `CODEDEN_DEBUG=1 codeden` to print them in the terminal
+        - Server log lines: run with `CODEDEN_DEBUG=1 codeharden` to print them in the terminal
         - Desktop app: `~/.codeden/logs/desktop-server.log`
         - UI problems: the browser's developer console
 

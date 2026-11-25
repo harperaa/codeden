@@ -1,6 +1,11 @@
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
-import { CODEDEN_VERSION, type SetupCheck } from "@codeden/contracts";
+import {
+  formatHardenVersion,
+  HARDEN_COMMAND,
+  HARDEN_UPDATE_COMMAND,
+  type SetupCheck,
+} from "@codeden/contracts";
 import {
   CLAUDE_SDK_VERSION,
   claudeSdkSource,
@@ -17,6 +22,7 @@ import {
   readLiveRunnerLock,
   readPointer,
 } from "@codeden/server";
+import { oldHomeNotice } from "./harden-home";
 import type { LaunchInfo } from "./launcher";
 import { findRunningServer } from "./running";
 
@@ -48,7 +54,10 @@ function loadError(mod: string): string | null {
 async function claudeSupport(depsDir: string): Promise<[string, string]> {
   if (claudeSdkSource() === "workspace") return ["ok", `SDK ${CLAUDE_SDK_VERSION} (workspace)`];
   if (!isClaudeSdkInstalled(depsDir)) {
-    return ["--", "not installed yet; installs on first use, or run `codeden doctor --install`"];
+    return [
+      "--",
+      `not installed yet; installs on first use, or run \`${HARDEN_COMMAND} doctor --install\``,
+    ];
   }
   try {
     await importClaudeSdkFrom(depsDir);
@@ -70,7 +79,7 @@ async function installClaudeSupport(depsDir: string): Promise<boolean> {
       `Claude Code support could not be installed: ${error instanceof Error ? error.message : error}`,
     );
     console.error(
-      "Check your network and npm configuration, then run `codeden doctor --install` again.",
+      `Check your network and npm configuration, then run \`${HARDEN_COMMAND} doctor --install\` again.`,
     );
     return false;
   }
@@ -93,7 +102,7 @@ export async function doctor(
   ]);
   const runner = readLiveRunnerLock(paths.runnerLock);
   const rows: Array<[string, string, string]> = [
-    ["ok", "CodeDen", CODEDEN_VERSION],
+    ["ok", "Version", formatHardenVersion()],
     ...versionRows(home, opts.launch),
     [existsSync(home) ? "ok" : "--", "Data directory", home],
     [
@@ -130,6 +139,8 @@ export async function doctor(
     }
   }
   for (const warning of status.warnings) console.log(`\nWarning: ${warning.message}`);
+  const notice = oldHomeNotice(home);
+  if (notice) console.log(`\nNote: ${notice}`);
   if (!status.ready) {
     console.log(
       "\nInstall and sign in to Claude Code, Codex or OpenCode: at least one agent provider is required.",
@@ -166,7 +177,7 @@ function versionRows(home: string, launch?: LaunchInfo): Array<[string, string, 
         ? [
             "xx",
             "Current version",
-            `${pointer.version} can't start: ${problem}; run \`codeden update\``,
+            `${pointer.version} can't start: ${problem}; run \`${HARDEN_UPDATE_COMMAND}\``,
           ]
         : [
             "ok",

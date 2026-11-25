@@ -11,10 +11,10 @@ CodeDen runs on your computer, but you can open it from your phone or tablet: an
 From a terminal (handy on a headless machine):
 
 ```
-codeden password             # type a password (or pipe one in)
-codeden password --generate  # make one up and print it once
-codeden network on           # or: codeden network off
-codeden network              # show whether it's on, and the addresses
+codeharden password             # type a password (or pipe one in)
+codeharden password --generate  # make one up and print it once
+codeharden network on           # or: codeharden network off
+codeharden network              # show whether it's on, and the addresses
 ```
 
 These work whether CodeDen is running or not. Changing the password signs out every phone and tablet.
@@ -25,9 +25,9 @@ These work whether CodeDen is running or not. Changing the password signs out ev
 
 **Settings › Network access** lists every address CodeDen answers on, each with a **QR code**:
 
-- **This computer** (`http://localhost:4317`): only works on the computer itself.
-- **Your local network** (Wi-Fi or Ethernet), e.g. `http://192.168.1.20:4317`.
-- **Your VPN**, e.g. Tailscale's `http://100.101.102.103:4317` (any address in `100.64.0.0/10`, or an interface named like a VPN).
+- **This computer** (`http://localhost:4417`): only works on the computer itself.
+- **Your local network** (Wi-Fi or Ethernet), e.g. `http://192.168.1.20:4417`.
+- **Your VPN**, e.g. Tailscale's `http://100.101.102.103:4417` (any address in `100.64.0.0/10`, or an interface named like a VPN).
 
 Point your phone's camera at the QR code (or type the address into its browser). You get a sign-in page: enter the password once and the phone stays signed in for **90 days**. The terminal also prints the same addresses when CodeDen starts with network access on.
 
@@ -61,12 +61,12 @@ Everything else works: the orchestrator and PM chats, sessions and their transcr
 
 ## HTTPS through Tailscale Serve
 
-A plain `http://100.x.y.z:4317` address can't give a phone notifications or dictation. If the computer runs Tailscale, **Tailscale Serve** can put HTTPS in front of CodeDen on a name like `https://<machine>.<tailnet>.ts.net:8445`. That unlocks **notifications**, **dictation** and **installing to the home screen** as a real app. Serve must run on the same computer as CodeDen.
+A plain `http://100.x.y.z:4417` address can't give a phone notifications or dictation. If the computer runs Tailscale, **Tailscale Serve** can put HTTPS in front of CodeDen on a name like `https://<machine>.<tailnet>.ts.net:8445`. That unlocks **notifications**, **dictation** and **installing to the home screen** as a real app. Serve must run on the same computer as CodeDen.
 
-1. Set a password (once): `codeden password`.
-2. Tell CodeDen the address to trust: `codeden network origin add https://<machine>.<tailnet>.ts.net:8445`. Only `https://<host name>[:port]` is accepted (no path, no IP address). Check them with `codeden network origin list`.
-3. Turn network access on and keep CodeDen on `127.0.0.1`, so the proxy is the only way in: `codeden network on --loopback-only`. The same choice is **Settings › Network access › Listen on this computer only**. Without `--loopback-only`, `network on` listens on every interface as before.
-4. Start the proxy: `tailscale serve --bg --https=8445 http://127.0.0.1:4317`.
+1. Set a password (once): `codeharden password`.
+2. Tell CodeDen the address to trust: `codeharden network origin add https://<machine>.<tailnet>.ts.net:8445`. Only `https://<host name>[:port]` is accepted (no path, no IP address). Check them with `codeharden network origin list`.
+3. Turn network access on and keep CodeDen on `127.0.0.1`, so the proxy is the only way in: `codeharden network on --loopback-only`. The same choice is **Settings › Network access › Listen on this computer only**. Without `--loopback-only`, `network on` listens on every interface as before.
+4. Start the proxy: `tailscale serve --bg --https=8445 http://127.0.0.1:4417`.
 
 On the phone (on your tailnet), open `https://<machine>.<tailnet>.ts.net:8445`, sign in with the password and allow notifications. Without a session, or while network access is off, that address answers 401 or 403; `ss -ltn` shows CodeDen only on `127.0.0.1`.
 
@@ -81,11 +81,11 @@ How CodeDen treats a request for a trusted address: it counts as coming from ano
 ## Security model
 
 - **Off by default, and only with a password.** CodeDen refuses to listen beyond `127.0.0.1` unless network access is switched on *and* a password is set, including at startup.
-- **Only a hash is stored.** The password is kept as a salted scrypt hash in `~/.codeden/remote-access.json` (readable only by you where the OS supports file modes). Each device's 90-day session token is random; only its SHA-256 hash is stored, with the device's browser name and when it was last seen.
+- **Only a hash is stored.** The password is kept as a salted scrypt hash in `~/.codeharden/remote-access.json` (readable only by you where the OS supports file modes). Each device's 90-day session token is random; only its SHA-256 hash is stored, with the device's browser name and when it was last seen.
 - **Session cookie.** A signed-in device holds the token in an `HttpOnly`, `SameSite=Lax` cookie (also `Secure` when CodeDen is served over HTTPS, including through a trusted origin).
 - **Who is remote** is decided by the connection's own address: anything other than this computer's loopback (`127.0.0.0/8`, `::1`, and their IPv4-mapped forms) is remote. `X-Forwarded-For` and similar headers are never trusted, so they grant nothing. The one addition is a trusted origin (above): a request naming its host is also remote, which only ever demands more.
-- **Remote devices sign in with the password; the install token doesn't work for them.** This computer keeps using the install token exactly as before, so `npx codeden` and the desktop app are unaffected.
-- **Guessing is throttled.** Only failed sign-ins count, per address. After three wrong passwords each try has to wait 1 s, then 2 s, 4 s … up to 30 s; ten failures within 15 minutes lock that address out for 15 minutes. Other devices keep working. Failed sign-ins are logged with their address (never the password) in `~/.codeden/logs/remote-access.log`.
+- **Remote devices sign in with the password; the install token doesn't work for them.** This computer keeps using the install token exactly as before, so `npx codeharden` and the desktop app are unaffected.
+- **Guessing is throttled.** Only failed sign-ins count, per address. After three wrong passwords each try has to wait 1 s, then 2 s, 4 s … up to 30 s; ten failures within 15 minutes lock that address out for 15 minutes. Other devices keep working. Failed sign-ins are logged with their address (never the password) in `~/.codeharden/logs/remote-access.log`.
 - **What a signed-in device can reach:** the web UI, its HTTP API and its WebSockets (live updates, the terminal and browser panels), the same things you can do at the computer.
 - **What is never reachable from the network, even when it's on:** the agents' MCP endpoint (`/mcp`, which answers 404), the runner (it keeps listening on `127.0.0.1` only, as does its MCP proxy), and changing network access itself: the switch and the password can only be changed on the computer running CodeDen (or with the CLI there). A phone can see the settings and sign devices out.
 - **Request checks still apply.** `Host` must be a loopback name or, while network access is on, one of this computer's own LAN or VPN addresses on CodeDen's port. `Origin`, when present, must be CodeDen's own: other websites, `null` origins and other ports on the same address are refused.

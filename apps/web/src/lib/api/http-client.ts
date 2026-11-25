@@ -48,6 +48,7 @@ import {
 } from "@codeden/contracts";
 import { httpAutomationsApi } from "./automations-api";
 import type { CodeDenClient, SendMode } from "./client";
+import { httpDevPreviewApi } from "./dev-preview-api";
 import { httpFactoryApi } from "./factory-api";
 import { createFetcher } from "./http";
 import {
@@ -61,6 +62,7 @@ import { httpGithubApi, httpOrchestrationApi, httpSessionConflictApi } from "./h
 import { httpAuthApi, httpNetworkApi } from "./network-api";
 import { httpQueueApi } from "./queue-api";
 import { RealtimeSocket } from "./realtime-socket";
+import { httpSecureFoundationApi } from "./secure-foundation-api";
 import { openTerminalSocket } from "./terminal-channel";
 import type { MentionCandidate } from "./types";
 import { httpUpdatesApi } from "./updates-api";
@@ -232,6 +234,8 @@ export function createHttpClient(origin: string, opts: HttpClientOptions = {}): 
     getUpdates: (o) =>
       get(`/updates${o?.refresh ? "?refresh=1" : ""}`, (v) => UpdateStatus.parse(v)),
     updates: httpUpdatesApi(http, origin),
+    secureFoundation: httpSecureFoundationApi(http),
+    devPreview: httpDevPreviewApi(http),
     async completeSetup() {
       await post("/setup/complete");
     },

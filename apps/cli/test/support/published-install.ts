@@ -8,6 +8,7 @@
 import { cpSync, mkdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
+import { HARDEN_COMMAND, HARDEN_PACKAGE_NAME } from "@codeden/contracts";
 import { CLI_ROOT } from "./fake-registry";
 
 const RUNTIME_DEPS = ["node-pty", "playwright-core", "@napi-rs/keyring"];
@@ -16,11 +17,14 @@ export function installPublishedCopy(
   base: string,
   opts: { version?: string; linkDeps?: boolean } = {},
 ): string {
-  const root = join(base, "install", "node_modules", "codeden");
+  const root = join(base, "install", "node_modules", HARDEN_PACKAGE_NAME);
   mkdirSync(root, { recursive: true });
   cpSync(join(CLI_ROOT, "dist"), join(root, "dist"), { recursive: true });
   const pkg = JSON.parse(readFileSync(join(CLI_ROOT, "package.json"), "utf8"));
   if (opts.version) pkg.version = opts.version;
+  // As a release packs it: the channel's name and command, not the repository's.
+  pkg.name = HARDEN_PACKAGE_NAME;
+  pkg.bin = { [HARDEN_COMMAND]: "./dist/cli.js" };
   writeFileSync(join(root, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
   if (opts.linkDeps) linkRuntimeDeps(base);
   return join(root, "dist", "cli.js");

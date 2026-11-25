@@ -7,7 +7,7 @@ body:
       value: |
         Have an idea? Great. Describe the problem first; it makes the right solution much easier to find.
 
-        Changes to anything in the "Locked decisions" table of [docs/DESIGN.md](https://github.com/leonvanzyl/codeden/blob/main/docs/DESIGN.md) need a design discussion, and this issue is the place for it.
+        Changes to anything in the "Locked decisions" table of [docs/DESIGN.md](https://github.com/harperaa/codeharden/blob/harden/docs/DESIGN.md) need a design discussion, and this issue is the place for it.
 
   - type: textarea
     id: problem

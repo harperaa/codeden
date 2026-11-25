@@ -26,6 +26,7 @@ import { join } from "node:path";
 import { TERMINAL_CONTROL_PREFIX } from "@codeden/contracts";
 import WebSocket from "ws";
 import { type RunningServer, type StartServerOptions, startServer } from "../src";
+import { imageName, LABEL } from "../src/execution/docker/args";
 import { DockerBackend } from "../src/execution/docker/backend";
 import { type Exec, runTool } from "../src/services/exec";
 import { listSessionFiles } from "../src/services/files/session-files";
@@ -208,7 +209,7 @@ async function main(): Promise<void> {
       "--latest",
       "--quiet",
       "--filter",
-      `label=codeden.project=${projectId}`,
+      `label=${LABEL.project}=${projectId}`,
     );
     execFileSync(
       "docker",
@@ -334,9 +335,9 @@ async function main(): Promise<void> {
     () => {
       const [info] = JSON.parse(docker("inspect", container));
       const labels = info.Config.Labels as Record<string, string>;
-      check(labels["codeden.session"] === sessionId, "codeden.session label");
-      check(labels["codeden.project"] === projectId, "codeden.project label");
-      check(Boolean(labels["codeden.version"]), "codeden.version label");
+      check(labels[LABEL.session] === sessionId, "codeden.session label");
+      check(labels[LABEL.project] === projectId, "codeden.project label");
+      check(Boolean(labels[LABEL.version]), "codeden.version label");
       check(info.Config.User === "1000:1000", `user ${info.Config.User}`);
       check(info.HostConfig.Init === true, "--init");
       check(info.HostConfig.Privileged === false, "not privileged");
@@ -534,7 +535,7 @@ async function main(): Promise<void> {
   });
 
   await step("no secret in docker inspect, the image, the container's env or the logs", () => {
-    const image = `codeden-runner:${record?.imageVersion}`;
+    const image = imageName(String(record?.imageVersion));
     const places: Record<string, string> = {
       "docker inspect": docker("inspect", container),
       "image inspect": docker("image", "inspect", image),
@@ -594,7 +595,7 @@ main()
         "--format",
         "{{.Names}}",
         "--filter",
-        "label=codeden.install",
+        `label=${LABEL.install}`,
       ).split(/s+/)) {
         if (name && madeHere.has(name)) {
           docker("rm", "--force", name);

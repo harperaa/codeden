@@ -4,6 +4,7 @@
 // redistribute) ends up inlined.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, sep } from "node:path";
+import { readHardenChannel } from "../../../scripts/harden/channel-define.mjs";
 
 /** The package root that owns a bundled module path, or null for workspace sources. */
 function packageRoot(id) {
@@ -46,7 +47,7 @@ export function thirdPartyNotices({ forbidden = [], fileName = "THIRD-PARTY-NOTI
       this.emitFile({
         type: "asset",
         fileName,
-        source: `The codeden bundle includes the following third-party packages.\n\n${body}\n`,
+        source: `The ${readHardenChannel(process.env, { quiet: true }).packageName} bundle includes the following third-party packages.\n\n${body}\n`,
       });
     },
   };

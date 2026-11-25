@@ -29,7 +29,7 @@ Fixtures replace the recording cwd with `<CWD>`, the session id with `<SESSION>`
 
 ## Loading the Claude Agent SDK (`src/claude/sdk/`)
 
-The SDK is not redistributed in the published `codeden` package. `loadClaudeSdk()` picks the source with `claudeSdkSource()`:
+The SDK is not redistributed in the published `codeharden` package. `loadClaudeSdk()` picks the source with `claudeSdkSource()`:
 
 - **workspace** (dev, unit tests, e2e): a plain `import("@anthropic-ai/claude-agent-sdk")` from `node_modules`.
 - **deps** (the published bundle, where tsdown defines `__CODEDEN_CLAUDE_SDK_ON_DEMAND__`): `installClaudeSdk()` runs `npm install @anthropic-ai/claude-agent-sdk@<CLAUDE_SDK_VERSION> --omit=optional --omit=peer --prefix <home>/deps` once, then the entry is imported by absolute file URL (`createRequire(...).resolve` + `pathToFileURL`, so Windows paths work). The runner calls `configureClaudeSdk({ depsDir })` at start.

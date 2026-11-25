@@ -1,3 +1,4 @@
+import { HARDEN_PRODUCT_NAME } from "@codeden/contracts";
 import { Menu, type MenuItemConstructorOptions, nativeImage, Tray } from "electron";
 import type { TrayView } from "./tray-view";
 
@@ -23,7 +24,7 @@ export class AppTray {
     const image = nativeImage.createFromPath(icon);
     if (process.platform === "darwin") image.setTemplateImage(true);
     this.tray = new Tray(image);
-    this.tray.setToolTip("CodeDen");
+    this.tray.setToolTip(HARDEN_PRODUCT_NAME);
     // A click opens the window on Windows and Linux; macOS shows the menu (the convention).
     if (process.platform !== "darwin") this.tray.on("click", () => actions.open());
     this.render();
@@ -56,7 +57,7 @@ export class AppTray {
     const items: MenuItemConstructorOptions[] = [];
     for (const line of view?.lines ?? ["Starting..."]) items.push({ label: line, enabled: false });
     items.push({ type: "separator" });
-    items.push({ label: "Open CodeDen", click: () => this.actions.open() });
+    items.push({ label: `Open ${HARDEN_PRODUCT_NAME}`, click: () => this.actions.open() });
     items.push({ label: "Open the inbox", click: () => this.actions.openInbox() });
     const update = view?.update;
     if (update) {
@@ -68,7 +69,7 @@ export class AppTray {
       });
     }
     items.push({ type: "separator" });
-    items.push({ label: "Quit CodeDen", click: () => this.actions.quit() });
+    items.push({ label: `Quit ${HARDEN_PRODUCT_NAME}`, click: () => this.actions.quit() });
     return items;
   }
 }

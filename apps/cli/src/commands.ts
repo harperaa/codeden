@@ -4,7 +4,7 @@
  * `runner-link` never loads the server.
  */
 import { join } from "node:path";
-import { CODEDEN_VERSION } from "@codeden/contracts";
+import { CODEDEN_VERSION, formatHardenVersion, HARDEN_COMMAND } from "@codeden/contracts";
 import {
   ensureHome,
   ensureInstallToken,
@@ -14,6 +14,7 @@ import {
 } from "@codeden/server";
 import { DEFAULT_PORT, HELP, type ParsedCli } from "./args";
 import { doctor } from "./doctor";
+import { oldHomeNotice } from "./harden-home";
 import type { LaunchInfo } from "./launcher";
 import { networkCommand, passwordCommand } from "./network-command";
 import { openBrowser } from "./open-browser";
@@ -31,7 +32,7 @@ function launchInfo(home: string): LaunchInfo {
       binVersion: CODEDEN_VERSION,
       kind: "source",
       source: "source",
-      restartCommand: "codeden",
+      restartCommand: HARDEN_COMMAND,
       home,
       warning: null,
     }
@@ -58,6 +59,8 @@ export async function runCommand(args: string[], parsed: ParsedCli): Promise<num
     return 2;
   }
 
+  const notice = oldHomeNotice(home);
+  if (notice) console.log(notice);
   const paths = ensureHome(home);
   const token = ensureInstallToken(paths.token);
   const running = await findRunningServer(paths.serverLock);
@@ -120,13 +123,13 @@ export async function runCommand(args: string[], parsed: ParsedCli): Promise<num
     });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "EADDRINUSE") {
-      console.error(`Port ${port} is in use. Try: codeden --port ${port + 1}`);
+      console.error(`Port ${port} is in use. Try: ${HARDEN_COMMAND} --port ${port + 1}`);
       return 1;
     }
     throw error;
   }
 
-  console.log(`CodeDen ${CODEDEN_VERSION} is running at ${server.url}`);
+  console.log(`${formatHardenVersion()} is running at ${server.url}`);
   console.log(`Open: ${server.launchUrl}`);
   if (server.network.enabled && server.network.store.loopbackOnly) {
     console.log("Network access is on, loopback only: reachable through the trusted proxy:");

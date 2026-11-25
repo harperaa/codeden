@@ -10,6 +10,7 @@ import {
   composerPlaceholders,
   isSendKey,
 } from "@/components/composer/composer-box";
+import { DevPreviewPmBar } from "@/components/harden/dev-preview/bar";
 import { MobileNavButton } from "@/components/shell/mobile-nav";
 import { ThreadView } from "@/components/thread/thread-view";
 import { Button } from "@/components/ui/button";
@@ -137,6 +138,7 @@ export function RoleChat({
         <span className="text-2xs text-muted-foreground">Not started</span>
         <ReadOnlyBadge className="ml-auto" />
       </header>
+      <DevPreviewPmBar projectId={role === "pm" ? projectId : null} />
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {empty(roleDraftKey(role, projectId))}
       </div>

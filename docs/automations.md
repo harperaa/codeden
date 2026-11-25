@@ -90,6 +90,17 @@ The CodeDen server downloads the link **once**, when you press **Preview**, and 
 
 The templates are ordinary Markdown files (shipped in the package under `templates/automations/`); open one with **Use template**, or export it, to see how a good prompt is structured.
 
+**Staggered start times.** The times above are the first project's. So that the same automation doesn't start at the same moment in every project, each scheduled automation of a new project's starter set starts 10 minutes after the last free time: the second project's Security audit runs Mondays 03:10, the third's 03:20, and so on, past the hour when needed (the seventh's is 04:00). Only the time of day moves; the days and the cadence stay the template's.
+
+- **Which time a new project gets.** The earliest of the template's time, +10, +20, … that no active project's copy of that automation has now. The copies are read as they are, so a schedule you changed counts with its new time and frees its old one. An archived project's times are free again, and so is the time of a copy you deleted or turned into a manual or event-triggered automation.
+- **Nothing existing is rescheduled.** The time is set once, when the automation is created (with the project, or by **Enable starter set** for a starter the project doesn't have). It is not an edit, and later changes in other projects never move it.
+- **Same moment** means the same hour and minute in the same timezone (the automation's, else the project's, else this computer's), whatever days the copies run on. Schedules in different timezones are not compared.
+- **What is moved.** Schedules whose minute and hour are plain numbers or plain lists (`0 5 * * 2`; `0 11,15 * * *` moves both hours together). A template with a range, a step or `*` in its minute or hour keeps its schedule in every project, and a copy with such a schedule takes no time.
+- **Never past midnight**, which would change the day. When every 10-minute time up to the end of the day is taken, the new project gets the one the fewest projects use, the earliest first.
+- Event-triggered and manual starters (Issue triage), automations for all projects and automations you create yourself, from a template or not, are not staggered.
+
+**Upstream-sync reviews.** A project that is a checkout of a hardened fork (this repository or a fork of it) also gets two automations that are not templates: **Daily upstream sync: first review** and **Daily upstream sync: second review**. They arrive switched off, and **Enable starter set** leaves them off. [The two review automations](codeharden-sync-cooldown.md#the-two-review-automations) says what they do and what they need.
+
 ## Triggers
 
 In files, the editor's choices are stored as one of three trigger types. Schedules are always stored as a cron expression, so "Every weekday at 09:00" is `0 9 * * 1-5`.

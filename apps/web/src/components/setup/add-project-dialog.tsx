@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { FolderOpen, GitBranch } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { SecureFoundationSlot } from "@/components/harden/secure-foundation/slot";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -103,6 +104,7 @@ export function ProjectSourcePicker({
           </button>
         ))}
       </div>
+      <SecureFoundationSlot />
       {source === "folder" ? (
         platform.capabilities.folderPicker ? (
           <NativeFolderField value={folder} onChange={setFolder} />

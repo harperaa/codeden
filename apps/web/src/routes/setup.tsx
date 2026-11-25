@@ -11,6 +11,7 @@ import { useClaudeSdkStatus, useInstallClaudeSdk } from "@/components/setup/clau
 import { LocalWhisperCard } from "@/components/setup/local-whisper-card";
 import { NotificationsRow } from "@/components/setup/notifications-row";
 import { Logo } from "@/components/shell/logo";
+import { Wordmark } from "@/components/shell/wordmark";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useClient } from "@/lib/api";
@@ -135,7 +136,9 @@ export function SetupPage() {
       <div className="relative w-full max-w-2xl">
         <div className="mb-8 flex flex-col items-center text-center">
           <Logo className="mb-4 size-12" />
-          <h1 className="text-2xl font-semibold tracking-tight">Welcome to CodeDen</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Welcome to <Wordmark />
+          </h1>
           <p className="mt-1.5 max-w-md text-sm text-muted-foreground">
             We'll reuse what's already set up on this machine. Nothing to type if you're already
             signed in.

@@ -5,7 +5,8 @@
   "description": "Shared zod schemas: agent event model, entities, runner protocol, UI WebSocket messages, settings.",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./harden-channel": "./src/harden-channel.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

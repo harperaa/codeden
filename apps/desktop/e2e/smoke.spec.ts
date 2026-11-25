@@ -10,7 +10,7 @@ import { unpackedApp } from "./support";
  * Desktop smoke test (§17): the unpacked app for this OS (`pnpm desktop:build`) starts its
  * own server and runner in an isolated home with the Fake provider, loads the UI through the
  * token bootstrap, exposes the preload bridge and the tray, zooms and remembers the zoom
- * (View menu), follows `codeden://` links from a
+ * (View menu), follows `codeharden://` links from a
  * second launch, hides to the tray on close, and quits leaving the runner running (which the
  * test then stops, so nothing outlives it).
  */
@@ -127,7 +127,7 @@ test("the desktop app starts, bridges, tracks, follows links and quits cleanly",
   await test.step("the tray reads live counts from the server", async () => {
     await expect
       .poll(() => hook(app as ElectronApplication, "trayLabels"), { timeout: 30_000 })
-      .toEqual(expect.arrayContaining(["No agents running", "Open CodeDen", "Quit CodeDen"]));
+      .toEqual(expect.arrayContaining(["No agents running", "Open CodeHarden", "Quit CodeHarden"]));
     expect(await (await api("/api/activity")).json()).toEqual({ running: 0, waiting: 0, inbox: 0 });
     expect(await hook(app as ElectronApplication, "keepAwake")).toBe(false);
   });
@@ -190,10 +190,10 @@ test("the desktop app starts, bridges, tracks, follows links and quits cleanly",
     await page.keyboard.press("Escape");
   });
 
-  await test.step("a codeden:// link from a second launch opens in this window", async () => {
+  await test.step("a codeharden:// link from a second launch opens in this window", async () => {
     // Linux CI has no setuid sandbox helper, so every launch needs --no-sandbox, not just the first.
     const extra = process.platform === "linux" ? ["--no-sandbox"] : [];
-    const second = spawnSync(exe, ["--home", home, ...extra, "codeden://inbox"], {
+    const second = spawnSync(exe, ["--home", home, ...extra, "codeharden://inbox"], {
       env,
       timeout: 60_000,
     });

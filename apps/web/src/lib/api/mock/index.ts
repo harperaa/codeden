@@ -6,7 +6,9 @@ import {
 } from "@codeden/contracts";
 import { providerAvailability } from "@/components/composer/model-picker/logic";
 import type { CodeDenClient } from "../client";
+import { mockDevPreviewApi } from "../dev-preview-api";
 import { ApiRequestError } from "../http";
+import { mockSecureFoundationApi } from "../secure-foundation-api";
 import { startAmbient } from "./ambient";
 import { mockArchivedPage } from "./archived";
 import { mockAutomationsApi } from "./automations";
@@ -96,6 +98,19 @@ export function createMockClient(opts: MockClientOptions = {}): CodeDenClient {
 
   const client: CodeDenClient = {
     kind: "mock",
+    secureFoundation: mockSecureFoundationApi(),
+    devPreview: mockDevPreviewApi({
+      projectOf: (sessionId) =>
+        world.snapshot.sessions.find((s) => s.id === sessionId)?.projectId ?? null,
+      // The local project stands for one the app can suggest nothing for.
+      hasDevScript: (projectId) =>
+        world.snapshot.projects.find((p) => p.id === projectId)?.kind !== "local",
+      projectName: (projectId) => world.snapshot.projects.find((p) => p.id === projectId)?.name,
+      sessionTitle: (sessionId) => {
+        const session = world.snapshot.sessions.find((s) => s.id === sessionId);
+        return session ? (session.title ?? session.purpose) : undefined;
+      },
+    }),
     getSnapshot: () => delay(world.snapshot, 150),
     // The mock's sessions are short: it always answers with the whole session.
     getSessionSnapshot: (id) => delay(world.sessionSnapshot(id), 120),

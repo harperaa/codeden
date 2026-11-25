@@ -2,6 +2,7 @@ import { z } from "zod";
 import { Id, Timestamp } from "./common";
 import type { InboxItem } from "./entities/inbox";
 import type { Session } from "./entities/session";
+import { HARDEN_DEEP_LINK_SCHEME } from "./harden-channel";
 import { BrowserCookie, BrowserHandoffTab, BrowserRelayEndpoint } from "./runner/browser";
 
 /**
@@ -110,7 +111,7 @@ export type DesktopHostMessage = z.infer<typeof DesktopHostMessage>;
 // ---------------------------------------------------------------- codeden:// links
 
 /** The custom URL scheme the desktop app registers. */
-export const DEEP_LINK_SCHEME = "codeden";
+export const DEEP_LINK_SCHEME = HARDEN_DEEP_LINK_SCHEME;
 
 /** Where a `codeden://` link points. */
 export const DeepLinkTarget = z.discriminatedUnion("kind", [

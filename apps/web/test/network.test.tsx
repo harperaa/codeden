@@ -137,7 +137,7 @@ describe("sign-in page", () => {
     const signIn = vi.fn(async () => {});
     const onSignedIn = vi.fn();
     renderWithClient(<SignInScreen onSignedIn={onSignedIn} />, clientWith(signIn));
-    expect(screen.getByRole("heading", { name: "Sign in to CodeDen" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Sign in to CodeHarden" })).toBeTruthy();
     const field = screen.getByLabelText("Password");
     expect(field.getAttribute("type")).toBe("password");
     expect(field.getAttribute("autocomplete")).toBe("current-password");

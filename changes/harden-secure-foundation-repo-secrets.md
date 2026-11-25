@@ -1,0 +1,5 @@
+---
+section: added
+---
+
+- **Secure Foundation tells you which repository secrets the project's workflows need.** GitHub copies no secret from a template, so in a new repository the template's Claude review jobs failed on every pull request until `CLAUDE_CODE_OAUTH_TOKEN` was added, with nothing saying why. Once the setup is over, the project's Secure Foundation card lists every repository secret and variable the project's own workflow files use that the repository doesn't have: what it is for, which workflows and jobs use it and when they run, what happens until it is set, and the steps to add it. What is already there, such as the `DOPPLER_TOKEN` the deploy stores, is shown as set, and **Check again** asks anew. You add the secrets yourself, on GitHub or in your own terminal: the app never sets one and never asks for a value. Without `gh`, the names are still listed as unchecked. See [Repository secrets the project's workflows need](docs/secure-foundation.md#repository-secrets-the-projects-workflows-need).

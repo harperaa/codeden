@@ -1,0 +1,818 @@
+name: Desktop installers
+# What the person who is asked to approve sees as the run's title: which tag, and whether it
+# signs and publishes.
+run-name: Desktop installers ${{ inputs.tag }} ${{ inputs.dry-run && '(dry run)' || '(sign and publish)' }}
+
+# Builds the desktop installers of one CodeHarden release on Windows, macOS and Linux and,
+# when asked, attaches them to that release on GitHub (docs/codeharden-desktop-release.md).
+#
+# This fork's own workflow. Upstream's Release workflow (release.yml) stays disabled: it would
+# publish to npm and react to every `v*.*.*` tag, which CodeHarden's tags match. This one never
+# starts by itself: a person runs it (Actions > Desktop installers > Run workflow, on the
+# default branch) for a tag that already exists.
+#
+#   tag      the release to build, `v<VERSION>` (`v2026.0105.0518`); it must exist
+#   dry-run  on (the default): build and check everything, unsigned, and keep the installers
+#            as workflow artifacts; no release is created or changed, no secret is read and
+#            nobody is asked to approve anything.
+#            off (a real run): wait for a person's approval, then sign, attach the installers
+#            and the update files to the tag's GitHub release and publish it as the latest.
+#
+# Approval. A real run's signing jobs use the GitHub environment `release`, which the owner
+# protects with "Required reviewers" (Settings > Environments). GitHub starts such a job, and
+# lets it read the environment's secrets, only after a reviewer pressed "Review deployments"
+# on the run's page. The signing secrets are kept in that environment, not in the repository:
+# a repository secret can be read by any workflow on any branch, an environment's only by a
+# job that names the environment, from a branch the environment allows, after the review.
+#   - One approval per real run. The macOS and the Windows job name the environment and wait
+#     together; one review releases both. The job that publishes names no environment (it
+#     would ask a second time, an hour later): it needs both signing jobs, so it can't start
+#     before the approval, and it never starts when the review is rejected.
+#   - A dry run names no environment anywhere, so it never waits, and every secret expression
+#     is empty for it: it builds exactly as a repository without secrets does.
+#   - `check` refuses a real run when the environment is missing (GitHub would create it on
+#     first use, with no protection), has no required reviewers, or may be used by anything
+#     but the default branch.
+#     The environment's branch rule is matched against the branch the run was started on, not
+#     against the tag, so the rule to set is "only the default branch".
+#   - A fork that publishes without approval sets the repository variable RELEASE_APPROVAL to
+#     `none` (required reviewers don't exist for private repositories on every plan).
+#
+# Jobs:
+#   check    the tag has the right shape, exists, names a commit of the default branch and its
+#            VERSION file names it; a real run was started on the default branch and the
+#            approval gate is there. Holds no secret. The later jobs stop when the tag no
+#            longer names the commit found here.
+#   build    the builds that hold no secret: all three systems of a dry run, Linux (nothing
+#            to sign) of a real run. Checks the commit out, builds and packages (the same
+#            script and configuration as a local `pnpm desktop:dist`), checks the macOS
+#            signatures, and uploads the files as an artifact. Read-only token: these jobs
+#            run the repository's and its dependencies' code. They restore and save no cache.
+#   sign     real runs only: macOS and Windows, the same steps as `build` (a copy; a test
+#            keeps the two the same), in the environment `release`. Waits for the approval; then, before anything is checked out, stops if
+#            the environment has no signing secrets for a system that must be signed.
+#   release  only when dry-run is off, and only after every build passed. Creates the
+#            release as a draft when the tag has none, attaches every file (the `latest*.yml`
+#            update files last) and only then publishes it and marks it latest. An installed
+#            app reads the latest *published* release, so it never sees one without its
+#            update files. If this job fails, the release stays as it was left (a draft);
+#            run the workflow again for the same tag.
+#
+# Signing is per system; each signing job's build step is given its own system's secrets only:
+#   macOS    CSC_LINK + CSC_KEY_PASSWORD (a Developer ID Application .p12) and, for
+#            notarization, APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD + APPLE_TEAM_ID. All five or
+#            none: with some of them missing the job stops and names them, instead of
+#            shipping a signed app that Apple has not notarized. With all five, the signature
+#            check requires a Developer ID signature, a stapled notarization ticket and
+#            Gatekeeper's acceptance of the downloaded app.
+#   Windows  WIN_CSC_LINK + WIN_CSC_KEY_PASSWORD (a code-signing .pfx). Never CSC_LINK:
+#            electron-builder falls back to it on Windows, and would try to sign the
+#            installer with the Apple certificate.
+#   Linux    none.
+# Which systems a real run must sign is the repository variable SIGNED_INSTALLERS: `macos`
+# when unset, or `windows`, `macos windows`, `none`. A real run stops when such a system has
+# no secrets, instead of publishing an unsigned app over a signed one. A system that is not
+# listed is published unsigned when it has no secrets: Windows installers unsigned, macOS apps
+# signed ad hoc (apps/desktop/electron-builder.config.mjs). A dry run is always unsigned.
+#
+# A fork builds its own app: the names come from its PACKAGE_NAME repository variable (and the
+# optional PRODUCT_NAME, APP_ID, DEFAULT_PORT), and the app updates from the fork's own
+# releases. Outside CodeHarden's repository PACKAGE_NAME must be set.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build (v<VERSION>, for example v2026.0105.0518)
+        required: true
+        type: string
+      dry-run:
+        description: Build and check only; attach nothing to the release
+        type: boolean
+        default: true
+
+# Nothing by default; each job asks for what it needs.
+permissions: {}
+
+concurrency:
+  group: harden-desktop-${{ inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  CODEHARDEN_REPO: harperaa/codeharden
+
+jobs:
+  check:
+    name: Check the tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      # To read the environment's rules ("Check the approval gate"): GitHub lists that request
+      # under the Actions permission, read. A public repository's rules can be read without
+      # it; a private fork's can't.
+      actions: read
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      sha: ${{ steps.tag.outputs.sha }}
+      version: ${{ steps.tag.outputs.version }}
+      npm_version: ${{ steps.tag.outputs.npm_version }}
+      must_sign: ${{ steps.signing.outputs.must_sign }}
+    steps:
+      - name: Check the tag's shape and that it exists
+        id: tag
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          PACKAGE_NAME: ${{ vars.PACKAGE_NAME }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$TAG" =~ ^v([0-9]{4})\.([0-9]{4})\.([0-9]{4})$ ]]; then
+            echo "::error::The tag must be v<VERSION>, like v2026.0105.0518"; exit 1
+          fi
+          version="${TAG#v}"
+          # The npm form: leading zeros stripped per field (valid semver; what the app carries).
+          npm_version="${BASH_REMATCH[1]}.$((10#${BASH_REMATCH[2]})).$((10#${BASH_REMATCH[3]}))"
+          if ! gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --silent 2> /dev/null; then
+            echo "::error::The tag ${TAG} does not exist in ${GITHUB_REPOSITORY}"; exit 1
+          fi
+          # The commit the tag names now. The later jobs build and publish this commit only: a
+          # tag that is moved while the run waits for its approval stops them.
+          sha=$(gh api "repos/${GITHUB_REPOSITORY}/commits/refs/tags/${TAG}" --jq '.sha')
+          if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Could not find the commit ${TAG} names"; exit 1
+          fi
+          # Only a commit of the default branch is built. A real run executes the tag's
+          # packaging scripts and dependencies with the signing secrets, so they must be code
+          # that reached the default branch the usual way, not whatever a tag was pushed onto.
+          head=$(gh api "repos/${GITHUB_REPOSITORY}/commits/refs/heads/${DEFAULT_BRANCH}" --jq '.sha')
+          ahead=$(gh api "repos/${GITHUB_REPOSITORY}/compare/${head}...${sha}" --jq '.ahead_by')
+          if [ "$ahead" != "0" ]; then
+            echo "::error::${TAG} is not a commit of ${DEFAULT_BRANCH}: a release tag is made on ${DEFAULT_BRANCH} (scripts/harden/release.sh)"
+            exit 1
+          fi
+          found=$(gh api "repos/${GITHUB_REPOSITORY}/contents/VERSION?ref=${sha}" \
+            -H "Accept: application/vnd.github.raw" | tr -d '[:space:]')
+          if [ "$found" != "$version" ]; then
+            echo "::error::VERSION at ${TAG} is \"${found}\", not ${version}: this is not a CodeHarden release tag"
+            exit 1
+          fi
+          repo=$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+          if [ "$repo" != "$CODEHARDEN_REPO" ] && [ -z "$PACKAGE_NAME" ]; then
+            echo "::error::Set the repository variable PACKAGE_NAME first (scripts/harden/setup-fork.sh): this fork must not build its app as CodeHarden"
+            exit 1
+          fi
+          {
+            echo "tag=${TAG}"
+            echo "sha=${sha}"
+            echo "version=${version}"
+            echo "npm_version=${npm_version}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Building ${TAG} (app version ${npm_version}, commit ${sha})"
+
+      # Which systems a real run must sign. Decided here, where no secret is, so a wrong value
+      # stops the run before anyone is asked to approve it.
+      - name: Read which systems a real run must sign
+        id: signing
+        shell: bash
+        env:
+          SIGNED_INSTALLERS: ${{ vars.SIGNED_INSTALLERS }}
+        run: |
+          set -euo pipefail
+          wanted="${SIGNED_INSTALLERS:-macos}"
+          must_sign=""
+          if [ "$wanted" != "none" ]; then
+            for word in ${wanted//,/ }; do
+              case "$word" in
+                macos | windows)
+                  case " ${must_sign} " in
+                    *" ${word} "*) ;;
+                    *) must_sign="${must_sign}${must_sign:+ }${word}" ;;
+                  esac
+                  ;;
+                *)
+                  echo "::error::The repository variable SIGNED_INSTALLERS must be unset (macos), or one of: macos, windows, macos windows, none"
+                  exit 1
+                  ;;
+              esac
+            done
+          fi
+          echo "must_sign=${must_sign}" >> "$GITHUB_OUTPUT"
+          echo "A real run must sign: ${must_sign:-nothing}"
+
+      # A real run signs and publishes only after a person approved it, and that is the
+      # environment's doing, not this file's: GitHub holds the `sign` jobs until a required
+      # reviewer has approved. What this step adds is a refusal to start when that protection
+      # is not there, because GitHub creates an environment that a workflow names and that
+      # does not exist, with no rules at all. An environment's rules (not its secrets) can be
+      # read by anyone who can read the repository; for this job's token that is the Actions
+      # permission, read.
+      # A dry run reports the same findings as warnings and goes on: it uses no environment.
+      - name: Check the approval gate
+        shell: bash
+        env:
+          DRY_RUN: ${{ inputs.dry-run }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_APPROVAL: ${{ vars.RELEASE_APPROVAL }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          docs='docs/codeharden-desktop-release.md, "Approval before signing and publishing"'
+          problems=0
+          stop() {
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "::warning::A real run would stop here. $1"
+            else
+              echo "::error::$1"
+            fi
+            problems=1
+          }
+          # The environment's branch rule looks at the branch a run was started on. This is the
+          # same rule, said early and by name; the environment is what enforces it.
+          if [ "$GITHUB_REF" != "refs/heads/${DEFAULT_BRANCH}" ]; then
+            stop "A real run must be started on ${DEFAULT_BRANCH}; this one was started on ${GITHUB_REF}."
+          fi
+          case "${RELEASE_APPROVAL:-required}" in
+            none)
+              echo "::notice::RELEASE_APPROVAL is none: this repository publishes its installers without an approval, and the environment's rules are not checked."
+              ;;
+            required)
+              # How many reviewers; which branches may use it (any, protected ones, or the ones
+              # that match its own rules); whether administrators may skip the review.
+              if ! rules=$(gh api "repos/${GITHUB_REPOSITORY}/environments/release" --jq \
+                '"\([.protection_rules[]? | (.reviewers // []) | length] | add // 0) \(.deployment_branch_policy | if . == null then "any" elif .custom_branch_policies == true then "selected" elif .protected_branches == true then "protected" else "any" end) \(.can_admins_bypass == true)"'); then
+                stop "The environment \"release\" does not exist (or can't be read). Create it and protect it first (${docs}), or set the repository variable RELEASE_APPROVAL to none to publish without an approval."
+              else
+                read -r reviewers branches bypass <<< "$rules"
+                if [ "$reviewers" = "0" ]; then
+                  stop "The environment \"release\" has no required reviewers, so nothing would wait for an approval. Add them (${docs}), or set the repository variable RELEASE_APPROVAL to none to publish without an approval."
+                fi
+                # Only the default branch, by exactly one rule that is its name: a workflow file
+                # on any other branch or tag the environment admits could ask for the secrets.
+                fix="Under \"Deployment branches and tags\" choose \"Selected branches and tags\" with one rule, the branch ${DEFAULT_BRANCH} (${docs})."
+                case "$branches" in
+                  selected)
+                    if ! allowed=$(gh api "repos/${GITHUB_REPOSITORY}/environments/release/deployment-branch-policies?per_page=100" --jq \
+                      '[.branch_policies[] | "\(.type // "branch") \(.name)"] | join(", ")'); then
+                      stop "The branch rules of the environment \"release\" can't be read. ${fix}"
+                    elif [ "$allowed" != "branch ${DEFAULT_BRANCH}" ]; then
+                      stop "The environment \"release\" may be used by: ${allowed:-no branch at all}. Only the branch ${DEFAULT_BRANCH} should be allowed, or a workflow on another branch or tag could ask for its secrets. ${fix}"
+                    fi
+                    ;;
+                  protected)
+                    stop "The environment \"release\" lets every protected branch use it (and every branch, when none is protected), so a workflow on another branch could ask for its secrets. ${fix}"
+                    ;;
+                  *)
+                    stop "The environment \"release\" lets every branch use it, so a workflow on any branch could ask for its secrets. ${fix}"
+                    ;;
+                esac
+                if [ "$bypass" = "true" ]; then
+                  echo "::warning::The environment \"release\" lets administrators start its jobs without a review (\"Allow administrators to bypass configured protection rules\" is on)."
+                fi
+                if [ "$problems" = 0 ]; then
+                  echo "::notice::The environment \"release\" requires a review (${reviewers} reviewer(s)) and only ${DEFAULT_BRANCH} may use it: a real run waits for an approval before it signs or publishes."
+                fi
+              fi
+              ;;
+            *)
+              echo "::error::The repository variable RELEASE_APPROVAL must be unset (required), required or none"
+              exit 1
+              ;;
+          esac
+          if [ "$problems" = 1 ] && [ "$DRY_RUN" != "true" ]; then exit 1; fi
+
+  # The builds that hold no secret: all three systems of a dry run, and Linux (which has
+  # nothing to sign) of a real run. No environment, so nothing here waits for an approval, and
+  # every secret expression in the steps is empty here: `!inputs.dry-run` is false for a dry
+  # run, and no secret is given to Linux.
+  build:
+    name: build (${{ matrix.os }})
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(inputs.dry-run && '["windows-latest", "macos-latest", "ubuntu-latest"]' || '["ubuntu-latest"]') }}
+    runs-on: ${{ matrix.os }}
+    # A hung step (a launch check that never ends) fails the job instead of running for hours.
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      NPM_VERSION: ${{ needs.check.outputs.npm_version }}
+      # The fork's names, for the build (scripts/harden/channel-define.mjs). Empty means the
+      # default; the release repository is always this one.
+      PACKAGE_NAME: ${{ vars.PACKAGE_NAME }}
+      PRODUCT_NAME: ${{ vars.PRODUCT_NAME }}
+      APP_ID: ${{ vars.APP_ID }}
+      DEFAULT_PORT: ${{ vars.DEFAULT_PORT }}
+      HARDEN_BRANCH: ${{ vars.HARDEN_BRANCH }}
+      # The Secure Foundation template (unset: CodeHarden's own; `none`: no such option).
+      TEMPLATE_REPOSITORY: ${{ vars.TEMPLATE_REPOSITORY }}
+      TEMPLATE_BRANCH: ${{ vars.TEMPLATE_BRANCH }}
+      RELEASE_REPOSITORY: ${{ github.repository }}
+    # The same steps as `sign`'s, line for line (the test fails when they differ): change both.
+    steps:
+      # The `sign` jobs only (a real run's macOS and Windows), within seconds of the approval
+      # and before anything is checked out: a system that must be signed and has no signing
+      # secret stops here. That is the case of an environment that was created but never given
+      # its secrets; without this the run would publish an unsigned app over a signed one.
+      # Only whether a secret is set reaches this step, never a value. It can't be asked
+      # before the approval: a workflow's token can't list an environment's secrets, and it
+      # can't tell an environment's secret from a repository secret of the same name.
+      - name: Check that the environment has the signing secrets
+        if: ${{ !inputs.dry-run && matrix.os != 'ubuntu-latest' }}
+        shell: bash
+        env:
+          MUST_SIGN: ${{ needs.check.outputs.must_sign }}
+          HAS_SIGNING_SECRETS: ${{ matrix.os == 'macos-latest' && (secrets.CSC_LINK != '' || secrets.CSC_KEY_PASSWORD != '' || secrets.APPLE_ID != '' || secrets.APPLE_APP_SPECIFIC_PASSWORD != '' || secrets.APPLE_TEAM_ID != '') || matrix.os == 'windows-latest' && (secrets.WIN_CSC_LINK != '' || secrets.WIN_CSC_KEY_PASSWORD != '') }}
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" = "macOS" ]; then system=macos; else system=windows; fi
+          case " ${MUST_SIGN} " in
+            *" ${system} "*) ;;
+            *)
+              echo "${system}: a real run may publish this system unsigned (SIGNED_INSTALLERS)."
+              exit 0
+              ;;
+          esac
+          if [ "$HAS_SIGNING_SECRETS" != "true" ]; then
+            echo "::error::The environment \"release\" has no ${system} signing secrets, and a real run must sign the ${system} app (the repository variable SIGNED_INSTALLERS; macos when unset). Add them as environment secrets under Settings > Environments > release (docs/codeharden-desktop-release.md). A repository that publishes this system unsigned says so in SIGNED_INSTALLERS."
+            exit 1
+          fi
+          echo "${system}: the signing secrets are set."
+
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ needs.check.outputs.tag }}
+          persist-credentials: false
+      # Only the commit `check` examined is built: it is the one known to be part of the
+      # default branch. Nothing from the repository has run yet, so a tag that was moved since
+      # (a real run can wait a long time for its approval) stops here, before its code runs.
+      - name: Check that the tag still names the commit that was checked
+        shell: bash
+        env:
+          CHECKED: ${{ needs.check.outputs.sha }}
+        run: |
+          set -euo pipefail
+          found=$(git rev-parse HEAD)
+          if [ "$found" != "$CHECKED" ]; then
+            echo "::error::The tag was moved after it was checked: it named ${CHECKED} and names ${found} now. Nothing was built."
+            exit 1
+          fi
+      # No cache in this workflow, for dependencies or for Electron: what is signed is built
+      # from what this job downloaded itself, never from files an earlier run (a dry run needs
+      # no approval) left in a cache. The price is a slower install.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      # Electron fetches its ~100 MB binary from GitHub releases on first use. Retry transient
+      # network errors.
+      - name: Download the Electron binary (with retries)
+        shell: bash
+        working-directory: apps/desktop
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if node -e "require('electron')" > /dev/null; then exit 0; fi
+            echo "::warning::Electron download failed (attempt $attempt of 5); retrying"
+            sleep $((attempt * 30))
+          done
+          exit 1
+
+      - name: Build the installers
+        shell: bash
+        env:
+          # Real runs only (`!inputs.dry-run`): a dry run gets an empty value for each, also
+          # while a repository-level copy of a secret still exists.
+          # macOS only: the Developer ID Application certificate (.p12, base64 or a URL), its
+          # password, and the Apple account that notarizes.
+          CSC_LINK: ${{ !inputs.dry-run && matrix.os == 'macos-latest' && secrets.CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ !inputs.dry-run && matrix.os == 'macos-latest' && secrets.CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ !inputs.dry-run && matrix.os == 'macos-latest' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ !inputs.dry-run && matrix.os == 'macos-latest' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ !inputs.dry-run && matrix.os == 'macos-latest' && secrets.APPLE_TEAM_ID || '' }}
+          # Windows only: a code-signing certificate (.pfx, base64 or a URL) and its password.
+          WIN_CSC_LINK: ${{ !inputs.dry-run && matrix.os == 'windows-latest' && secrets.WIN_CSC_LINK || '' }}
+          WIN_CSC_KEY_PASSWORD: ${{ !inputs.dry-run && matrix.os == 'windows-latest' && secrets.WIN_CSC_KEY_PASSWORD || '' }}
+        run: |
+          set -euo pipefail
+          mac=(CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID)
+          win=(WIN_CSC_LINK WIN_CSC_KEY_PASSWORD)
+          # Unset what is empty, so electron-builder skips signing on Windows and signs ad hoc
+          # on macOS (see electron-builder.config.mjs).
+          for v in "${mac[@]}" "${win[@]}"; do
+            if [ -z "${!v:-}" ]; then unset "$v"; fi
+          done
+          # A system never sees another system's certificate, whatever the lines above say.
+          if [ "$RUNNER_OS" != "macOS" ]; then unset "${mac[@]}" CSC_NAME; fi
+          if [ "$RUNNER_OS" != "Windows" ]; then unset "${win[@]}"; fi
+          # Half-configured signing stops here, by name; the values are never printed.
+          missing_of() {
+            local v missing=()
+            for v in "$@"; do
+              if [ -z "${!v:-}" ]; then missing+=("$v"); fi
+            done
+            echo "${missing[*]:-}"
+          }
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            missing=$(missing_of "${mac[@]}")
+            if [ "$missing" = "${mac[*]}" ]; then
+              echo "macOS: no signing secrets; the apps are signed ad hoc."
+            elif [ -n "$missing" ]; then
+              echo "::error::macOS signing is half configured. Missing secrets: ${missing}. Set all five (CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID) or none: a signed app that is not notarized must not ship."
+              exit 1
+            else
+              echo "macOS: signing with the Developer ID certificate and notarizing."
+              echo "REQUIRE_DEVELOPER_ID=1" >> "$GITHUB_ENV"
+            fi
+          elif [ "$RUNNER_OS" = "Windows" ]; then
+            missing=$(missing_of "${win[@]}")
+            if [ "$missing" = "${win[*]}" ]; then
+              echo "Windows: no signing secrets; the installer is unsigned."
+            elif [ -n "$missing" ]; then
+              echo "::error::Windows signing is half configured. Missing secrets: ${missing}. Set both WIN_CSC_LINK and WIN_CSC_KEY_PASSWORD or neither."
+              exit 1
+            else
+              echo "Windows: signing the installer with the code-signing certificate."
+            fi
+          fi
+          # Never uploaded from here: the release job attaches the files.
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            pnpm --filter @codeden/desktop package --publish never --arch arm64 --arch x64
+          else
+            pnpm --filter @codeden/desktop package --publish never
+          fi
+          ls -la apps/desktop/release
+
+      # The .dmg and .zip as a user downloads them: a valid signature with the hardened
+      # runtime and our entitlements, an app that launches, and a Gatekeeper verdict on the
+      # quarantined copy that is never "damaged". With signing configured (REQUIRE_DEVELOPER_ID,
+      # set by the build step) it also requires a Developer ID signature, a stapled
+      # notarization ticket and Gatekeeper's acceptance.
+      - name: Check the macOS signatures
+        if: runner.os == 'macOS'
+        shell: bash
+        run: bash apps/desktop/scripts/check-mac-signature.sh apps/desktop/release
+
+      - name: Collect the release files
+        id: files
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          cd apps/desktop/release
+          files=(*.exe *.dmg *.zip *.AppImage *.deb *.blockmap latest*.yml)
+          if [ ${#files[@]} -eq 0 ]; then echo "::error::no installers were built"; exit 1; fi
+          # The app must carry the release's version, or it would never see its own updates.
+          feeds=(latest*.yml)
+          if [ ${#feeds[@]} -eq 0 ]; then echo "::error::no update file (latest*.yml) was built"; exit 1; fi
+          for feed in "${feeds[@]}"; do
+            if ! grep -qx "version: ${NPM_VERSION}" "$feed"; then
+              echo "::error::${feed} does not say version ${NPM_VERSION}: this tag's packaging does not carry the CodeHarden version"
+              exit 1
+            fi
+          done
+          printf '%s\n' "${files[@]}"
+          mkdir -p "$RUNNER_TEMP/desktop" && cp "${files[@]}" "$RUNNER_TEMP/desktop/"
+          echo "dir=$RUNNER_TEMP/desktop" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the installers
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-${{ matrix.os }}
+          path: ${{ steps.files.outputs.dir }}
+          if-no-files-found: error
+          retention-days: 14
+
+  # A real run's macOS and Windows builds: the same steps as `build`, written out again, in
+  # the environment `release`. (Written out, not shared through a YAML anchor: GitHub documents
+  # anchors for an `env` map and for a whole job, not for a `steps` list, and a file GitHub
+  # can't read would stop every installer run.) GitHub does not start these jobs, and gives them no secret of the environment,
+  # until a required reviewer has approved the run. Both wait at the same time for the same
+  # environment, so one review releases both. Skipped on a dry run, which therefore never asks.
+  sign:
+    name: build and sign (${{ matrix.os }})
+    needs: check
+    if: ${{ !inputs.dry-run }}
+    environment: release
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    # macOS gets two hours: Apple's notarization of the two apps (arm64 and x64) is waited for
+    # inside the build step, and it is slow for an app Apple has not seen before. The first
+    # signed build here took 46 minutes in that step alone, and the 60 minutes the job had
+    # then leave no room for a slower day. The approval is waited for before the job is sent
+    # to a runner, so that wait should not count; a job nobody approves fails after 30 days.
+    timeout-minutes: ${{ matrix.os == 'macos-latest' && 120 || 60 }}
+    permissions:
+      contents: read
+    env:
+      NPM_VERSION: ${{ needs.check.outputs.npm_version }}
+      # The fork's names, for the build (scripts/harden/channel-define.mjs). Empty means the
+      # default; the release repository is always this one.
+      PACKAGE_NAME: ${{ vars.PACKAGE_NAME }}
+      PRODUCT_NAME: ${{ vars.PRODUCT_NAME }}
+      APP_ID: ${{ vars.APP_ID }}
+      DEFAULT_PORT: ${{ vars.DEFAULT_PORT }}
+      HARDEN_BRANCH: ${{ vars.HARDEN_BRANCH }}
+      # The Secure Foundation template (unset: CodeHarden's own; `none`: no such option).
+      TEMPLATE_REPOSITORY: ${{ vars.TEMPLATE_REPOSITORY }}
+      TEMPLATE_BRANCH: ${{ vars.TEMPLATE_BRANCH }}
+      RELEASE_REPOSITORY: ${{ github.repository }}
+    # The same steps as `build`'s, line for line (the test fails when they differ): change both.
+    steps:
+      # The `sign` jobs only (a real run's macOS and Windows), within seconds of the approval
+      # and before anything is checked out: a system that must be signed and has no signing
+      # secret stops here. That is the case of an environment that was created but never given
+      # its secrets; without this the run would publish an unsigned app over a signed one.
+      # Only whether a secret is set reaches this step, never a value. It can't be asked
+      # before the approval: a workflow's token can't list an environment's secrets, and it
+      # can't tell an environment's secret from a repository secret of the same name.
+      - name: Check that the environment has the signing secrets
+        if: ${{ !inputs.dry-run && matrix.os != 'ubuntu-latest' }}
+        shell: bash
+        env:
+          MUST_SIGN: ${{ needs.check.outputs.must_sign }}
+          HAS_SIGNING_SECRETS: ${{ matrix.os == 'macos-latest' && (secrets.CSC_LINK != '' || secrets.CSC_KEY_PASSWORD != '' || secrets.APPLE_ID != '' || secrets.APPLE_APP_SPECIFIC_PASSWORD != '' || secrets.APPLE_TEAM_ID != '') || matrix.os == 'windows-latest' && (secrets.WIN_CSC_LINK != '' || secrets.WIN_CSC_KEY_PASSWORD != '') }}
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" = "macOS" ]; then system=macos; else system=windows; fi
+          case " ${MUST_SIGN} " in
+            *" ${system} "*) ;;
+            *)
+              echo "${system}: a real run may publish this system unsigned (SIGNED_INSTALLERS)."
+              exit 0
+              ;;
+          esac
+          if [ "$HAS_SIGNING_SECRETS" != "true" ]; then
+            echo "::error::The environment \"release\" has no ${system} signing secrets, and a real run must sign the ${system} app (the repository variable SIGNED_INSTALLERS; macos when unset). Add them as environment secrets under Settings > Environments > release (docs/codeharden-desktop-release.md). A repository that publishes this system unsigned says so in SIGNED_INSTALLERS."
+            exit 1
+          fi
+          echo "${system}: the signing secrets are set."
+
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ needs.check.outputs.tag }}
+          persist-credentials: false
+      # Only the commit `check` examined is built: it is the one known to be part of the
+      # default branch. Nothing from the repository has run yet, so a tag that was moved since
+      # (a real run can wait a long time for its approval) stops here, before its code runs.
+      - name: Check that the tag still names the commit that was checked
+        shell: bash
+        env:
+          CHECKED: ${{ needs.check.outputs.sha }}
+        run: |
+          set -euo pipefail
+          found=$(git rev-parse HEAD)
+          if [ "$found" != "$CHECKED" ]; then
+            echo "::error::The tag was moved after it was checked: it named ${CHECKED} and names ${found} now. Nothing was built."
+            exit 1
+          fi
+      # No cache in this workflow, for dependencies or for Electron: what is signed is built
+      # from what this job downloaded itself, never from files an earlier run (a dry run needs
+      # no approval) left in a cache. The price is a slower install.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      # Electron fetches its ~100 MB binary from GitHub releases on first use. Retry transient
+      # network errors.
+      - name: Download the Electron binary (with retries)
+        shell: bash
+        working-directory: apps/desktop
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if node -e "require('electron')" > /dev/null; then exit 0; fi
+            echo "::warning::Electron download failed (attempt $attempt of 5); retrying"
+            sleep $((attempt * 30))
+          done
+          exit 1
+
+      - name: Build the installers
+        shell: bash
+        env:
+          # Real runs only (`!inputs.dry-run`): a dry run gets an empty value for each, also
+          # while a repository-level copy of a secret still exists.
+          # macOS only: the Developer ID Application certificate (.p12, base64 or a URL), its
+          # password, and the Apple account that notarizes.
+          CSC_LINK: ${{ !inputs.dry-run && matrix.os == 'macos-latest' && secrets.CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ !inputs.dry-run && matrix.os == 'macos-latest' && secrets.CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ !inputs.dry-run && matrix.os == 'macos-latest' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ !inputs.dry-run && matrix.os == 'macos-latest' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ !inputs.dry-run && matrix.os == 'macos-latest' && secrets.APPLE_TEAM_ID || '' }}
+          # Windows only: a code-signing certificate (.pfx, base64 or a URL) and its password.
+          WIN_CSC_LINK: ${{ !inputs.dry-run && matrix.os == 'windows-latest' && secrets.WIN_CSC_LINK || '' }}
+          WIN_CSC_KEY_PASSWORD: ${{ !inputs.dry-run && matrix.os == 'windows-latest' && secrets.WIN_CSC_KEY_PASSWORD || '' }}
+        run: |
+          set -euo pipefail
+          mac=(CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID)
+          win=(WIN_CSC_LINK WIN_CSC_KEY_PASSWORD)
+          # Unset what is empty, so electron-builder skips signing on Windows and signs ad hoc
+          # on macOS (see electron-builder.config.mjs).
+          for v in "${mac[@]}" "${win[@]}"; do
+            if [ -z "${!v:-}" ]; then unset "$v"; fi
+          done
+          # A system never sees another system's certificate, whatever the lines above say.
+          if [ "$RUNNER_OS" != "macOS" ]; then unset "${mac[@]}" CSC_NAME; fi
+          if [ "$RUNNER_OS" != "Windows" ]; then unset "${win[@]}"; fi
+          # Half-configured signing stops here, by name; the values are never printed.
+          missing_of() {
+            local v missing=()
+            for v in "$@"; do
+              if [ -z "${!v:-}" ]; then missing+=("$v"); fi
+            done
+            echo "${missing[*]:-}"
+          }
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            missing=$(missing_of "${mac[@]}")
+            if [ "$missing" = "${mac[*]}" ]; then
+              echo "macOS: no signing secrets; the apps are signed ad hoc."
+            elif [ -n "$missing" ]; then
+              echo "::error::macOS signing is half configured. Missing secrets: ${missing}. Set all five (CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID) or none: a signed app that is not notarized must not ship."
+              exit 1
+            else
+              echo "macOS: signing with the Developer ID certificate and notarizing."
+              echo "REQUIRE_DEVELOPER_ID=1" >> "$GITHUB_ENV"
+            fi
+          elif [ "$RUNNER_OS" = "Windows" ]; then
+            missing=$(missing_of "${win[@]}")
+            if [ "$missing" = "${win[*]}" ]; then
+              echo "Windows: no signing secrets; the installer is unsigned."
+            elif [ -n "$missing" ]; then
+              echo "::error::Windows signing is half configured. Missing secrets: ${missing}. Set both WIN_CSC_LINK and WIN_CSC_KEY_PASSWORD or neither."
+              exit 1
+            else
+              echo "Windows: signing the installer with the code-signing certificate."
+            fi
+          fi
+          # Never uploaded from here: the release job attaches the files.
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            pnpm --filter @codeden/desktop package --publish never --arch arm64 --arch x64
+          else
+            pnpm --filter @codeden/desktop package --publish never
+          fi
+          ls -la apps/desktop/release
+
+      # The .dmg and .zip as a user downloads them: a valid signature with the hardened
+      # runtime and our entitlements, an app that launches, and a Gatekeeper verdict on the
+      # quarantined copy that is never "damaged". With signing configured (REQUIRE_DEVELOPER_ID,
+      # set by the build step) it also requires a Developer ID signature, a stapled
+      # notarization ticket and Gatekeeper's acceptance.
+      - name: Check the macOS signatures
+        if: runner.os == 'macOS'
+        shell: bash
+        run: bash apps/desktop/scripts/check-mac-signature.sh apps/desktop/release
+
+      - name: Collect the release files
+        id: files
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          cd apps/desktop/release
+          files=(*.exe *.dmg *.zip *.AppImage *.deb *.blockmap latest*.yml)
+          if [ ${#files[@]} -eq 0 ]; then echo "::error::no installers were built"; exit 1; fi
+          # The app must carry the release's version, or it would never see its own updates.
+          feeds=(latest*.yml)
+          if [ ${#feeds[@]} -eq 0 ]; then echo "::error::no update file (latest*.yml) was built"; exit 1; fi
+          for feed in "${feeds[@]}"; do
+            if ! grep -qx "version: ${NPM_VERSION}" "$feed"; then
+              echo "::error::${feed} does not say version ${NPM_VERSION}: this tag's packaging does not carry the CodeHarden version"
+              exit 1
+            fi
+          done
+          printf '%s\n' "${files[@]}"
+          mkdir -p "$RUNNER_TEMP/desktop" && cp "${files[@]}" "$RUNNER_TEMP/desktop/"
+          echo "dir=$RUNNER_TEMP/desktop" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the installers
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-${{ matrix.os }}
+          path: ${{ steps.files.outputs.dir }}
+          if-no-files-found: error
+          retention-days: 14
+
+  # The only job that can write to the repository, and it runs no code from it: it moves the
+  # files the build jobs made onto the release. It names no environment, so the run asks for
+  # one approval, not two: it needs the `sign` jobs, which did wait for it, and is skipped
+  # when they were rejected, failed or (a dry run) never ran.
+  release:
+    name: Attach to the release and publish it
+    needs: [check, build, sign]
+    if: ${{ !inputs.dry-run }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.check.outputs.tag }}
+      SHA: ${{ needs.check.outputs.sha }}
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      # The installers were built from the commit `check` found. A tag that was moved since
+      # would get a release whose files are not its own.
+      - name: Check that the tag still names the commit that was built
+        shell: bash
+        run: |
+          set -euo pipefail
+          now=$(gh api "repos/${GITHUB_REPOSITORY}/commits/refs/tags/${TAG}" --jq '.sha')
+          if [ "$now" != "$SHA" ]; then
+            echo "::error::${TAG} was moved while this run was building: it named ${SHA} and names ${now} now. Nothing was attached."
+            exit 1
+          fi
+
+      - name: Download the installers of this run
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts files
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --dir artifacts
+          for dir in artifacts/desktop-*; do
+            for file in "$dir"/*; do
+              name=$(basename "$file")
+              if [ -e "files/$name" ]; then echo "::error::two systems built ${name}"; exit 1; fi
+              cp "$file" "files/$name"
+            done
+          done
+          ls -la files
+
+      - name: Check that every system's files are there
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          cd files
+          missing=0
+          need() {
+            local matches=($1)
+            if [ ${#matches[@]} -eq 0 ]; then echo "::error::missing: $2 ($1)"; missing=1; fi
+          }
+          need "*.exe" "the Windows installer"
+          need "latest.yml" "the Windows update file"
+          need "*-arm64.dmg" "the macOS (Apple silicon) disk image"
+          need "*-x64.dmg" "the macOS (Intel) disk image"
+          need "*-arm64.zip" "the macOS (Apple silicon) update archive"
+          need "*-x64.zip" "the macOS (Intel) update archive"
+          need "latest-mac.yml" "the macOS update file"
+          need "*.AppImage" "the Linux AppImage"
+          need "*.deb" "the Debian package"
+          need "latest-linux.yml" "the Linux update file"
+          [ "$missing" = 0 ]
+
+      # A draft until everything is attached. A release that already exists is used as it is.
+      - name: Create the release as a draft, if the tag has none
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "The release ${TAG} exists already."
+            exit 0
+          fi
+          # The release's notes: this version's entry in the changelog at the tag.
+          gh api "repos/${GITHUB_REPOSITORY}/contents/CODEHARDEN-CHANGELOG.md?ref=${TAG}" \
+            -H "Accept: application/vnd.github.raw" > changelog.md || : > changelog.md
+          awk -v v="$VERSION" '
+            /^## / { on = (index($0, "## " v " ") == 1 || $0 == "## " v); next }
+            on { print }
+          ' changelog.md > notes.md
+          [ -s notes.md ] || echo "CodeHarden ${VERSION}" > notes.md
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft \
+            --title "CodeHarden ${VERSION}" --notes-file notes.md
+
+      # The update files go last: an app acts on `latest*.yml`, so it never finds one that
+      # points at an installer that is not there yet.
+      - name: Attach the installers, then the update files
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          cd files
+          feeds=(latest*.yml)
+          others=()
+          for file in *; do
+            case "$file" in latest*.yml) ;; *) others+=("$file") ;; esac
+          done
+          gh release upload "$TAG" "${others[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+          gh release upload "$TAG" "${feeds[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Publish the release and mark it latest
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,assets \
+            --jq '"draft=\(.isDraft) assets=\(.assets | length)", (.assets[].name)'

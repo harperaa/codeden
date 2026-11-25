@@ -3,6 +3,7 @@
  * imported as a string at build time: the app and the docs show the same file, there is no copy
  * to drift, and the guide works offline.
  */
+import { hardenDocsUrl } from "@codeden/contracts";
 import source from "../../../../docs/factory-loop.md?raw";
 
 /** One `##` section of the guide: a table-of-contents entry. */
@@ -75,7 +76,7 @@ export function guideAnchors(markdown: string): Set<string> {
 }
 
 /** Where a link to another doc (`software-factory.md#settings-and-limits`) opens: on GitHub. */
-export const DOCS_URL = "https://github.com/leonvanzyl/codeden/blob/main/docs/";
+export const DOCS_URL = hardenDocsUrl();
 
 const RELATIVE_LINK = /\]\((?!#|[a-z][a-z0-9+.-]*:)(?:\.\/)?([^)\s]+)\)/gi;
 

@@ -4,6 +4,8 @@ import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 import {
   CODEDEN_VERSION,
+  HARDEN_APP_SLUG,
+  HARDEN_PRODUCT_NAME,
   RUNNER_PROTOCOL_VERSION,
   type RunnerCommand,
   RunnerToServerMessage,
@@ -15,11 +17,19 @@ const root = resolve(import.meta.dirname, "..");
 /** The unpacked app electron-builder made for this OS (`pnpm desktop:build`). */
 export function unpackedApp(): string {
   const candidates = {
-    win32: [join(root, "release", "win-unpacked", "CodeDen.exe")],
+    win32: [join(root, "release", "win-unpacked", `${HARDEN_PRODUCT_NAME}.exe`)],
     darwin: ["mac-arm64", "mac", "mac-universal"].map((d) =>
-      join(root, "release", d, "CodeDen.app", "Contents", "MacOS", "CodeDen"),
+      join(
+        root,
+        "release",
+        d,
+        `${HARDEN_PRODUCT_NAME}.app`,
+        "Contents",
+        "MacOS",
+        HARDEN_PRODUCT_NAME,
+      ),
     ),
-    linux: [join(root, "release", "linux-unpacked", "codeden")],
+    linux: [join(root, "release", "linux-unpacked", HARDEN_APP_SLUG)],
   }[process.platform as "win32" | "darwin" | "linux"];
   const found = candidates?.find((c) => existsSync(c));
   if (!found) throw new Error("No unpacked app: run `pnpm desktop:build` first");

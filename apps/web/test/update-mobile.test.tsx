@@ -62,7 +62,7 @@ describe("update banner on a phone (#296)", () => {
     expect(stacksOnPhones(banner)).toBe(true);
     // The icon and the message share the top row; the actions are not in it.
     const iconRow = banner.querySelector("svg")?.parentElement;
-    expect(iconRow?.textContent).toContain("CodeDen 0.7.2 is available.");
+    expect(iconRow?.textContent).toContain("CodeHarden 0.7.2 is available.");
     expect(iconRow?.contains(screen.getByRole("button", { name: "Update now" }))).toBe(false);
   });
 

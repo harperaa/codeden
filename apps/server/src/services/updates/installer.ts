@@ -42,10 +42,16 @@ const inheritedNpmConfig = new Set([
   "ca",
   "strict_ssl",
   "userconfig",
+  // Settings that only restrict which versions and sources an install may take, so a person's
+  // own stay in force. Not `ignore_scripts`: the terminal's native module is built or put in
+  // place by its install script, so an update installed without it would start and not work.
+  "min_release_age",
+  "before",
+  "allow_git",
 ]);
 
 /**
- * Install `codeden@<version>` side by side into `<home>/app/<version>` (§16): npm installs into
+ * Install `<channel package>@<version>` side by side into `<home>/app/<version>` (§16): npm installs into
  * a staging folder, the result is checked (package version, entry files, and the installed CLI
  * answering `--version`), then the folder is renamed into place. A lock file keeps the server
  * and `codeden update` from installing at the same time. Resolves immediately when the version

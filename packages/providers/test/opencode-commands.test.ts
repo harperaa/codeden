@@ -15,7 +15,12 @@ import {
   toProviderCommands,
   withSkill,
 } from "../src/opencode/commands";
+import { runOpenCodeCommandsInTests } from "../src/opencode/harden-commands";
 import { validateEventStream } from "../src/replay/validate";
+
+// CodeHarden sends slash commands as plain prompts (`harden-commands.ts`); this file keeps
+// upstream's command route tested.
+runOpenCodeCommandsInTests(true);
 
 const known = {
   commands: new Set(["hello", "team/review", "both"]),

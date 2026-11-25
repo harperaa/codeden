@@ -3,7 +3,7 @@
 ## Start with `doctor`
 
 ```sh
-npx codeden doctor
+npx codeharden doctor
 ```
 
 It runs the same checks as the setup screen and prints one line per item, then the command that fixes each problem:
@@ -35,7 +35,7 @@ To fix:
 | What | Where |
 |---|---|
 | Runner output | `~/.codeden/logs/runner.log` |
-| Server log lines | Run with `CODEDEN_DEBUG=1 codeden` to print them in the terminal. The desktop app always writes them to `~/.codeden/logs/desktop-server.log` (moved to `desktop-server.log.1` past 5 MB) |
+| Server log lines | Run with `CODEDEN_DEBUG=1 codeharden` to print them in the terminal. The desktop app always writes them to `~/.codeden/logs/desktop-server.log` (moved to `desktop-server.log.1` past 5 MB) |
 | Running server | `~/.codeden/server.json` (port and pid) |
 | Running runner | `~/.codeden/runner/runner.json` (port, pid and version) |
 | Database | `~/.codeden/codeden.db` (SQLite, WAL mode) |
@@ -51,18 +51,18 @@ On Windows `~` is your user folder, for example `C:\Users\you\.codeden`. If you 
 Another program (or another CodeDen with a different home) has the port. Start on another one:
 
 ```sh
-codeden --port 4400
+codeharden --port 4400
 ```
 
-If it's a stale CodeDen, `codeden stop` then start again.
+If it's a stale CodeDen, `codeharden stop` then start again.
 
 ### The page says "CodeDen is locked"
 
-The browser doesn't have the install token cookie, for example after clearing cookies, using another browser, or changing the port. Run `codeden` again: it prints and opens an authenticated link, even when CodeDen is already running.
+The browser doesn't have the install token cookie, for example after clearing cookies, using another browser, or changing the port. Run `codeharden` again: it prints and opens an authenticated link, even when CodeDen is already running.
 
 ### "CodeDen needs Node.js 24 or newer"
 
-Install Node.js 24 or later from <https://nodejs.org>, or with your version manager (`nvm install 24`, `fnm install 24`, `volta install node@24`). Check with `node --version` in the same terminal you run `npx codeden` from.
+Install Node.js 24 or later from <https://nodejs.org>, or with your version manager (`nvm install 24`, `fnm install 24`, `volta install node@24`). Check with `node --version` in the same terminal you run `npx codeharden` from.
 
 ### Claude Code, Codex or OpenCode is installed but broken
 
@@ -172,21 +172,21 @@ CodeDen doesn't ship the Claude Agent SDK. The first time it's needed (on the se
 
 - **Retry** on the Claude Code support row (Settings > First-run setup).
 - Start the Claude session again.
-- Run `npx codeden doctor --install`, which prints npm's output as it installs.
+- Run `npx codeharden doctor --install`, which prints npm's output as it installs.
 
 npm uses your normal configuration (`.npmrc`, `npm_config_registry`, proxy settings). If the folder ends up broken, delete `~/.codeden/deps/` and retry. A `.install.lock` left by a crashed install is cleared automatically once its process is gone, or after 10 minutes.
 
 ### An update failed or won't apply
 
-One-click updates install into `~/.codeden/app/<version>/` with npm, then CodeDen restarts into the new version (see [Updating](reference.md#updating)).
+One-click updates install into `~/.codeharden/app/<version>/` with npm, then CodeDen restarts into the new version (see [Updating](reference.md#updating)).
 
-- **"Couldn't update to X: npm install exited ..."**: npm's reason follows, usually a network, proxy or registry problem. npm uses your normal configuration (`.npmrc`, proxy settings). Fix it, then press **Retry**, or run `codeden update` to see npm's full output.
-- **"Update installed. Restart CodeDen to finish"**: CodeDen couldn't restart itself (it wasn't started by the `codeden` command, or the new version didn't answer within two minutes). Run `codeden stop`, then start it again the usual way; the new version starts.
-- **"CodeDen X exited before it started"**: the new version crashed on start, so CodeDen went back to the old one and shows the error. Check the terminal output, then retry or report it. `codeden update --rollback` (or **Roll back** in Settings > About) also goes back.
-- **"CodeDen X ... can't start (...); running Y instead"**: the installed version's files are incomplete (an interrupted install, cleaned folder or antivirus). Run `codeden update` to reinstall it, or delete `~/.codeden/app/<version>/` and `~/.codeden/app/current.json` to run the copy you launched.
-- **`codeden` still starts the old version**: run `codeden doctor` and look at *Launched copy*, *Installed versions* and *Current version*. A copy you launched that is newer than the installed one always wins (for example after `npm i -g codeden@latest`), and a source checkout never switches.
-- **`npx` keeps an old copy**: that's fine: the npx copy only launches the version in `~/.codeden/app`. To refresh npx's own copy, run `npx codeden@latest` once.
-- A `.install.lock` in `~/.codeden/app` left by a crashed install is cleared once its process is gone, or after 10 minutes. Old versions are pruned to the current and previous ones; a folder still in use on Windows is removed on a later update.
+- **"Couldn't update to X: npm install exited ..."**: npm's reason follows, usually a network, proxy or registry problem. npm uses your normal configuration (`.npmrc`, proxy settings). Fix it, then press **Retry**, or run `codeharden update` to see npm's full output.
+- **"Update installed. Restart CodeDen to finish"**: CodeDen couldn't restart itself (it wasn't started by the `codeharden` command, or the new version didn't answer within two minutes). Run `codeharden stop`, then start it again the usual way; the new version starts.
+- **"CodeDen X exited before it started"**: the new version crashed on start, so CodeDen went back to the old one and shows the error. Check the terminal output, then retry or report it. `codeharden update --rollback` (or **Roll back** in Settings > About) also goes back.
+- **"CodeDen X ... can't start (...); running Y instead"**: the installed version's files are incomplete (an interrupted install, cleaned folder or antivirus). Run `codeharden update` to reinstall it, or delete `~/.codeharden/app/<version>/` and `~/.codeharden/app/current.json` to run the copy you launched.
+- **`codeharden` still starts the old version**: run `codeharden doctor` and look at *Launched copy*, *Installed versions* and *Current version*. A copy you launched that is newer than the installed one always wins (for example after `npm i -g codeharden@latest`), and a source checkout never switches.
+- **`npx` keeps an old copy**: that's fine: the npx copy only launches the version in `~/.codeharden/app`. To refresh npx's own copy, run `npx codeharden@latest` once.
+- A `.install.lock` in `~/.codeharden/app` left by a crashed install is cleared once its process is gone, or after 10 minutes. Old versions are pruned to the current and previous ones; a folder still in use on Windows is removed on a later update.
 
 ### "older than the tested minimum"
 
@@ -200,7 +200,7 @@ opencode upgrade
 
 ### "The runner exited during start-up" or "did not start within 300 s"
 
-While CodeDen waits for its runner, the sidebar says **Starting the runner…**. A slow start (security software scanning files, a busy or cold disk) is waited for; CodeDen only gives up on a runner that hasn't started after five minutes. If the runner process exits during start-up, the error (hover the status in the sidebar, or see the server log) ends with the last lines of `~/.codeden/logs/runner.log`. A native module that failed to load (`node-pty`) usually means a broken or partial install: run `npm cache clean --force`, then `npx codeden@latest`. Security software that blocks new processes can also cause it.
+While CodeDen waits for its runner, the sidebar says **Starting the runner…**. A slow start (security software scanning files, a busy or cold disk) is waited for; CodeDen only gives up on a runner that hasn't started after five minutes. If the runner process exits during start-up, the error (hover the status in the sidebar, or see the server log) ends with the last lines of `~/.codeden/logs/runner.log`. A native module that failed to load (`node-pty`) usually means a broken or partial install: run `npm cache clean --force`, then `npx codeharden@latest`. Security software that blocks new processes can also cause it.
 
 ### Tests, installs or builds behave differently in agent sessions
 
@@ -214,7 +214,7 @@ To turn it off for one project, use **Settings → General → Agent environment
 
 ### Agents keep running after I close the terminal
 
-That's by design: the runner outlives the server so agents survive restarts. `codeden stop` stops both.
+That's by design: the runner outlives the server so agents survive restarts. `codeharden stop` stops both.
 
 ### The browser panel is empty or says no browser was found
 
@@ -248,7 +248,7 @@ CodeDen is tested on Windows first. Things worth knowing:
 - **Terminal shell.** Terminals open **PowerShell** (`powershell.exe`). To use PowerShell 7 or Git Bash, set `CODEDEN_SHELL` before starting, for example in PowerShell:
 
   ```powershell
-  $env:CODEDEN_SHELL = "pwsh.exe"; npx codeden
+  $env:CODEDEN_SHELL = "pwsh.exe"; npx codeharden
   ```
 
 - **Long paths.** Worktrees live under short paths (`~/.codeden/wt/<project>/<session>/`) to stay clear of the 260-character limit, but very deep repositories can still hit it. Enable long paths in git with `git config --global core.longpaths true`.
@@ -260,8 +260,8 @@ CodeDen is tested on Windows first. Things worth knowing:
 To reset CodeDen completely, stop it and remove the data directory. This deletes your projects list, sessions, transcripts, usage history and worktrees under `~/.codeden/wt/` (commit or push anything you want to keep first). Your repositories and your provider, GitHub and keychain logins are not touched.
 
 ```sh
-codeden stop
+codeharden stop
 # then delete ~/.codeden (or your CODEDEN_HOME)
 ```
 
-Still stuck? [Open an issue](https://github.com/leonvanzyl/codeden/issues/new/choose) with the `codeden doctor` output and the end of `runner.log` (check it for anything private first). Security problems go through a private report instead, see [SECURITY.md](../SECURITY.md).
+Still stuck? [Open an issue](https://github.com/harperaa/codeharden/issues/new/choose) with the `codeharden doctor` output and the end of `runner.log` (check it for anything private first). Security problems go through a private report instead, see [SECURITY.md](../SECURITY.md).

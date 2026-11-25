@@ -20,7 +20,7 @@ export const factoryHoldIssue = defineTool({
 /** `factory_release_issue`: let a held issue back into the factory loop. */
 export const factoryReleaseIssue = defineTool({
   name: "factory_release_issue",
-  description: `Let an issue you held (or that carries the \`${FACTORY_HOLD_LABEL}\` label) back into the factory loop: the label comes off, and on its next check the loop takes the issue in, or its parked item goes on from the queue. Give the reason when there is one (the prerequisite merged, the decision was made); it is noted on the item and posted on the issue.`,
+  description: `Let an issue you held back into the factory loop (one a person held, by putting the \`${FACTORY_HOLD_LABEL}\` label on it themselves, stays held until they take it off): the label comes off, and on its next check the loop takes the issue in, or its parked item goes on from the queue. Give the reason when there is one (the prerequisite merged, the decision was made); it is noted on the item and posted on the issue.`,
   roles: ["pm"],
   scope: "project",
   alwaysLoad: true,

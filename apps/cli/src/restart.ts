@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { HealthResponse } from "@codeden/contracts";
+import { HARDEN_PRODUCT_NAME, HealthResponse } from "@codeden/contracts";
 import { applyRollback, cliEntry, type RunningServer, writeUpdateResult } from "@codeden/server";
 import type { LaunchInfo } from "./launcher";
 
@@ -48,7 +48,7 @@ export async function handOver(opts: {
   const args = relaunchArgs(opts.args, port);
   let child: ChildProcess | undefined;
   supervise(() => child);
-  console.log(`\nCodeDen is restarting as ${expected}...`);
+  console.log(`\n${HARDEN_PRODUCT_NAME} is restarting as ${expected}...`);
   await opts.server.close();
 
   const launchedBy = JSON.stringify({
@@ -60,7 +60,7 @@ export async function handOver(opts: {
   const outcome = await watchStart(child, port, expected);
   if (outcome !== "exited") return exitCode(child);
 
-  const error = `CodeDen ${expected} exited before it started (code ${child.exitCode ?? "?"})`;
+  const error = `${HARDEN_PRODUCT_NAME} ${expected} exited before it started (code ${child.exitCode ?? "?"})`;
   console.error(`${error}; going back to ${opts.fromVersion}.`);
   applyRollback(home, opts.launch.binVersion);
   writeUpdateResult(home, { from: opts.fromVersion, to: expected, ok: false, error });

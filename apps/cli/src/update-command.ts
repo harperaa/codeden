@@ -1,4 +1,10 @@
-import { CODEDEN_VERSION, isNewerVersion, UpdateStatus } from "@codeden/contracts";
+import {
+  CODEDEN_VERSION,
+  HARDEN_PRODUCT_NAME,
+  HARDEN_UPDATE_COMMAND,
+  isNewerVersion,
+  UpdateStatus,
+} from "@codeden/contracts";
 import {
   applyRollback,
   ensureInstallToken,
@@ -12,8 +18,7 @@ import {
 import type { LaunchInfo } from "./launcher";
 import { findRunningServer } from "./running";
 
-const FROM_SOURCE =
-  "You're running CodeDen from source: update with `git pull`, `pnpm install` and `pnpm build`.";
+const FROM_SOURCE = `You're running ${HARDEN_PRODUCT_NAME} from source: update with \`git pull\`, \`pnpm install\` and \`pnpm build\`.`;
 
 /**
  * `codeden update [--rollback]` (§16). With a server running it asks that server to update or
@@ -35,11 +40,13 @@ export async function updateCommand(
   if (opts.rollback) {
     const result = applyRollback(home, opts.launch.binVersion);
     if (!result) {
-      console.log("Nothing to roll back to: no version was installed by `codeden update`.");
+      console.log(
+        `Nothing to roll back to: no version was installed by \`${HARDEN_UPDATE_COMMAND}\`.`,
+      );
       return 1;
     }
     console.log(
-      `Rolled back. CodeDen ${result.next} starts next time (${opts.launch.restartCommand}).`,
+      `Rolled back. ${HARDEN_PRODUCT_NAME} ${result.next} starts next time (${opts.launch.restartCommand}).`,
     );
     return 0;
   }
@@ -53,10 +60,10 @@ export async function updateCommand(
     return 1;
   }
   if (!isNewerVersion(latest, CODEDEN_VERSION)) {
-    console.log(`CodeDen ${CODEDEN_VERSION} is the latest version.`);
+    console.log(`${HARDEN_PRODUCT_NAME} ${CODEDEN_VERSION} is the latest version.`);
     return 0;
   }
-  console.log(`Installing CodeDen ${latest} ...`);
+  console.log(`Installing ${HARDEN_PRODUCT_NAME} ${latest} ...`);
   try {
     await installAppVersion({
       home,
@@ -70,7 +77,9 @@ export async function updateCommand(
   }
   writePointer(home, latest, CODEDEN_VERSION);
   pruneInstalled(home, [CODEDEN_VERSION]);
-  console.log(`Updated to ${latest}. Start CodeDen with \`${opts.launch.restartCommand}\`.`);
+  console.log(
+    `Updated to ${latest}. Start ${HARDEN_PRODUCT_NAME} with \`${opts.launch.restartCommand}\`.`,
+  );
   return 0;
 }
 
@@ -88,9 +97,7 @@ async function viaServer(port: number, token: string, rollback: boolean): Promis
     console.error(body.error?.message ?? `The server answered ${res.status}`);
     return 1;
   }
-  console.log(
-    rollback ? "Rolling back the running CodeDen ..." : "Updating the running CodeDen ...",
-  );
+  console.log(`${rollback ? "Rolling back" : "Updating"} the running ${HARDEN_PRODUCT_NAME} ...`);
   let last = "";
   for (let i = 0; i < 1200; i++) {
     let status: UpdateStatus;
@@ -98,7 +105,7 @@ async function viaServer(port: number, token: string, rollback: boolean): Promis
       const poll = await fetch(base, { headers, signal: AbortSignal.timeout(5000) });
       status = UpdateStatus.parse(await poll.json());
     } catch {
-      console.log("CodeDen is restarting; the browser reconnects on its own.");
+      console.log(`${HARDEN_PRODUCT_NAME} is restarting; the browser reconnects on its own.`);
       return 0;
     }
     const line = status.progress ?? status.state;
@@ -109,11 +116,15 @@ async function viaServer(port: number, token: string, rollback: boolean): Promis
       return 1;
     }
     if (status.state === "restarting") {
-      console.log(`CodeDen is restarting as ${status.target}; the browser reconnects on its own.`);
+      console.log(
+        `${HARDEN_PRODUCT_NAME} is restarting as ${status.target}; the browser reconnects on its own.`,
+      );
       return 0;
     }
     if (status.state === "installed" && !status.canRestart) {
-      console.log(`CodeDen ${status.target} is installed. Restart it: ${status.restartCommand}`);
+      console.log(
+        `${HARDEN_PRODUCT_NAME} ${status.target} is installed. Restart it: ${status.restartCommand}`,
+      );
       return 0;
     }
     await new Promise((r) => setTimeout(r, 500));

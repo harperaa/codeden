@@ -11,7 +11,7 @@
  * Loaded by `cli.ts` once the launcher has picked the version to run. Kept light: the server
  * code (`commands.ts`) loads only for the commands that need it, never for `runner-link`.
  */
-import { CODEDEN_VERSION, RunnerLinkExit } from "@codeden/contracts";
+import { formatHardenVersion, HARDEN_COMMAND, RunnerLinkExit } from "@codeden/contracts";
 import { HELP, type ParsedCli, parseCli } from "./args";
 import { homeFromArgs } from "./launcher";
 
@@ -22,7 +22,7 @@ import { homeFromArgs } from "./launcher";
  */
 async function runnerLinkCommand(home: string, extraArgs: boolean): Promise<number> {
   if (extraArgs) {
-    console.error("Usage: codeden runner-link [--home <dir>]");
+    console.error(`Usage: ${HARDEN_COMMAND} runner-link [--home <dir>]`);
     return RunnerLinkExit.usage;
   }
   const { runRunnerLink } = await import("@codeden/runner/link");
@@ -53,7 +53,7 @@ async function main(): Promise<number> {
     return 0;
   }
   if (values.version) {
-    console.log(CODEDEN_VERSION);
+    console.log(formatHardenVersion());
     return 0;
   }
   const nodeMajor = Number(process.versions.node.split(".")[0]);

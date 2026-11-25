@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Runs `pnpm typecheck` and `pnpm lint` before a branch is pushed, and refuses the push when
+# one fails (see "Checks before a push and in CI" in AGENTS.md). It never runs the tests: CI
+# does, on the pull request. Enabled per clone with: git config core.hooksPath scripts/harden/hooks
+#
+# Not checked: tags, deletions, and pushes to harden, main or mirror (the working branch receives
+# merges and release commits, which were checked on their branches; main and, in a fork of
+# CodeHarden, mirror are pure copies of upstream), sync branches (sync/...), branches that change
+# documentation only, and a branch that isn't the checked-out commit (its files aren't here to
+# check; CI checks it).
+# Git's own `--no-verify` skips the hook; say so in the pull request if you ever use it.
+set -euo pipefail
+
+zero="0000000000000000000000000000000000000000"
+docs='^docs/|^LICENSE$|^[^/]+\.md$|^(apps|packages)/[^/]+/README\.md$|^apps/runner/src/browser/README\.md$|^[^/]+\.(png|jpe?g|gif|svg|webp)$'
+head=$(git rev-parse HEAD)
+
+while read -r local_ref local_sha remote_ref _remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue
+  case "$remote_ref" in
+    refs/tags/* | refs/heads/harden | refs/heads/main | refs/heads/mirror) continue ;;
+    # A sync branch (upstream merged with harden) is pushed so that its pull request can be
+    # reviewed. CI runs every check on that pull request, the tests included: a failing check
+    # there is a finding for the review, not a reason to keep the branch off GitHub.
+    refs/heads/sync/*) continue ;;
+  esac
+  # Documentation only, compared with harden: nothing to check (CI skips these too).
+  base=$(git merge-base "$local_sha" refs/remotes/origin/harden 2> /dev/null || true)
+  if [ -n "$base" ]; then
+    changed=$(git diff --name-only "$base" "$local_sha")
+    if [ -z "$changed" ] || ! grep -qvE "$docs" <<< "$changed"; then continue; fi
+  fi
+  if [ "$local_sha" != "$head" ]; then
+    echo "pre-push: ${local_ref} is not the checked-out commit, so typecheck and lint are skipped for it. CI checks it." >&2
+    continue
+  fi
+  # The hook's stdin is the list of refs; the checks must not read it.
+  "$(git rev-parse --show-toplevel)/scripts/harden/push-checks.sh" < /dev/null >&2 || exit 1
+done
+exit 0

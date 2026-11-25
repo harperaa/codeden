@@ -20,10 +20,10 @@ const idle: DesktopUpdateState = {
 };
 
 describe("launch arguments", () => {
-  it("defaults to the shared ~/.codeden home and no deep link", () => {
+  it("defaults to the product's own ~/.codeharden home and no deep link", () => {
     const args = parseLaunchArgs(["."], {}, "/Users/me");
     expect(args).toEqual({
-      home: join("/Users/me", ".codeden"),
+      home: join("/Users/me", ".codeharden"),
       port: null,
       hidden: false,
       fake: false,
@@ -31,7 +31,7 @@ describe("launch arguments", () => {
     });
   });
 
-  it("reads --home, --port, --hidden, --fake and a codeden:// link among Chromium switches", () => {
+  it("reads --home, --port, --hidden, --fake and a codeharden:// link among Chromium switches", () => {
     const args = parseLaunchArgs(
       [
         "--allow-file-access",
@@ -40,7 +40,7 @@ describe("launch arguments", () => {
         "0",
         "--hidden",
         "--fake",
-        "codeden://inbox",
+        "codeharden://inbox",
       ],
       {},
     );
@@ -49,7 +49,7 @@ describe("launch arguments", () => {
       port: 0,
       hidden: true,
       fake: true,
-      deepLink: "codeden://inbox",
+      deepLink: "codeharden://inbox",
     });
   });
 
@@ -57,7 +57,7 @@ describe("launch arguments", () => {
     const args = parseLaunchArgs(["--port", "99999"], { CODEDEN_HOME: "/data/cd" });
     expect(args.home).toBe(resolve("/data/cd"));
     expect(args.port).toBeNull();
-    expect(DEFAULT_PORT).toBe(4317);
+    expect(DEFAULT_PORT).toBe(4417);
   });
 });
 
@@ -160,7 +160,7 @@ describe("tray", () => {
       autoUpdate: false,
     });
     expect(view.lines).toEqual(["2 agents running", "1 waiting on you", "3 items in the inbox"]);
-    expect(view.tooltip).toBe("CodeDen (2 running, 1 waiting)");
+    expect(view.tooltip).toBe("CodeHarden (2 running, 1 waiting)");
     expect(view.badge).toBe(3);
     expect(view.update).toBeNull();
   });
@@ -173,9 +173,9 @@ describe("tray", () => {
       autoUpdate: false,
     });
     expect(quiet.lines).toEqual(["No agents running"]);
-    expect(quiet.tooltip).toBe("CodeDen (idle)");
+    expect(quiet.tooltip).toBe("CodeHarden (idle)");
     const down = trayView({ activity: null, connected: false, update: idle, autoUpdate: false });
-    expect(down.lines).toEqual(["Not connected to the CodeDen server"]);
+    expect(down.lines).toEqual(["Not connected to the CodeHarden server"]);
     expect(down.badge).toBe(0);
   });
 
@@ -187,10 +187,10 @@ describe("tray", () => {
         update: { ...idle, phase, latest: "0.2.0", percent },
         autoUpdate: auto,
       }).update;
-    expect(at("available")).toEqual({ label: "Download CodeDen 0.2.0", command: "download" });
+    expect(at("available")).toEqual({ label: "Download CodeHarden 0.2.0", command: "download" });
     expect(at("available", true)).toBeNull();
     expect(at("downloading", false, 41.7)).toEqual({
-      label: "Downloading CodeDen 0.2.0 (41%)",
+      label: "Downloading CodeHarden 0.2.0 (41%)",
       command: null,
     });
     expect(at("downloaded")).toEqual({ label: "Restart to update to 0.2.0", command: "install" });
@@ -221,7 +221,7 @@ describe("app menu", () => {
   });
 
   it("puts About, Settings and Quit in the app menu on macOS only", () => {
-    expect(appMenuTemplate("darwin", actions)[0]?.label).toBe("CodeDen");
+    expect(appMenuTemplate("darwin", actions)[0]?.label).toBe("CodeHarden");
     expect(appMenuTemplate("win32", actions)[0]?.label).toBe("File");
   });
 });

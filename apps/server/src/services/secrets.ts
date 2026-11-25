@@ -1,4 +1,4 @@
-import type { SecretKey } from "@codeden/contracts";
+import { HARDEN_KEYCHAIN_SERVICE, type SecretKey } from "@codeden/contracts";
 
 /**
  * Secrets in the OS keychain (§6), e.g. an optional ElevenLabs key. Values never go to files,
@@ -40,7 +40,7 @@ export class KeyringSecretStore implements SecretStore {
 
   constructor(
     private readonly Entry: EntryCtor,
-    private readonly service = "codeden",
+    private readonly service = HARDEN_KEYCHAIN_SERVICE,
   ) {}
 
   async get(key: SecretKey): Promise<string | null> {

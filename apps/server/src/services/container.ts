@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { messageFrom, type Session } from "@codeden/contracts";
+import { HARDEN_PROJECTS_DIRNAME, messageFrom, type Session } from "@codeden/contracts";
 import { createImageEngineRegistry, type ImageEngineRegistry } from "@codeden/providers";
 import type { Db } from "../db/client";
 import type { EventStore } from "../events/store";
@@ -15,6 +15,7 @@ import { reportedCommands } from "./agent-config/slash-commands";
 import { ArtifactService } from "./artifacts";
 import { AutomationService, type AutomationServiceDeps } from "./automations/automation-service";
 import { BrowserService } from "./browser/browser-service";
+import { createDevPreview, type DevPreviewService } from "./dev-preview";
 import { type Exec, runTool } from "./exec";
 import { type FactoryOptions, FactoryService } from "./factory/factory-service";
 import { type FactoryGithub, GithubFactoryPort } from "./factory/github-port";
@@ -43,6 +44,7 @@ import {
   singleRunner,
 } from "./runner-port";
 import type { SecretStore } from "./secrets";
+import { createSecureFoundation, type SecureFoundationService } from "./secure-foundation";
 import { AutoRetry, type AutoRetryDeps } from "./sessions/auto-retry";
 import { ChecksLoop } from "./sessions/checks-loop";
 import { GeneratedImages } from "./sessions/generated-images";
@@ -80,6 +82,8 @@ export interface ServicesOptions {
   runner: RunnerPort;
   /** Routes each session to its own runner (`docs/remote-runners.md` §8); default: `runner`. */
   runners?: RunnerRouter;
+  /** Test seams of the dev preview (`services/dev-preview`). */
+  devPreview?: Parameters<typeof createDevPreview>[0]["overrides"];
   /** Clone URLs and brokered git credentials for sandbox runners (§9); tests inject one. */
   gitBroker?: GitBroker;
   /**
@@ -94,7 +98,7 @@ export interface ServicesOptions {
   /** Picks up PATH changes before a setup re-check (tests that pin PATH pass a no-op). */
   refreshPath?: () => Promise<unknown>;
   utility?: UtilityService;
-  /** Default clone location (`~/codeden-projects`). */
+  /** Default clone location (`~/codeharden-projects`, from `HARDEN_PROJECTS_DIRNAME`). */
   projectsDir?: string;
   /** User home for provider config roots (`~/.claude`, `~/.codex`). */
   userHome?: string;
@@ -176,6 +180,9 @@ export interface AppServices {
   /** Update checks and one-click self-update (§16; the desktop app's own updater, §17). */
   updates: Updates;
   setup: SetupService;
+  /** The "Secure Foundation" add-project option (`docs/secure-foundation.md`). */
+  secureFoundation: SecureFoundationService;
+  devPreview: DevPreviewService;
   /** Claude Code support: the Claude Agent SDK, installed on demand (§14). */
   claudeSdk: ClaudeSdkService;
   configFiles: ConfigFiles;
@@ -221,12 +228,8 @@ export function createServices(opts: ServicesOptions): AppServices {
       settings: () => opts.settings.get(),
       oneShot: runnerOneShot(opts.runner),
     });
-  const projects = new ProjectService({
-    db: opts.db,
-    store: opts.store,
-    exec,
-    projectsDir: opts.projectsDir ?? join(userHome, "codeden-projects"),
-  });
+  const projectsDir = opts.projectsDir ?? join(userHome, HARDEN_PROJECTS_DIRNAME);
+  const projects = new ProjectService({ db: opts.db, store: opts.store, exec, projectsDir });
   const sessionRepo = new SessionRepo(opts.db, opts.store);
   const artifacts = new ArtifactService(opts.db, opts.store, opts.paths.artifacts);
   const outbox = new Outbox(opts.db, opts.store);
@@ -506,6 +509,25 @@ export function createServices(opts: ServicesOptions): AppServices {
     }),
     localStt,
     setup,
+    devPreview: createDevPreview({
+      paths: opts.paths,
+      exec,
+      projects,
+      sessions: sessionRepo,
+      runners,
+      log: opts.log,
+      overrides: opts.devPreview,
+    }),
+    secureFoundation: createSecureFoundation({
+      exec,
+      home: opts.paths.home,
+      projectsDir,
+      projects,
+      sessions: () => sessions as SessionService,
+      factory: () => factory,
+      runner: opts.runner,
+      setup,
+    }),
     claudeSdk,
     usage,
     factory,

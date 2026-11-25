@@ -95,14 +95,18 @@ describe("desktop update state and IPC", () => {
   });
 });
 
-describe("codeden:// links", () => {
+describe("codeharden:// links", () => {
   const cases: Array<[string, DeepLinkTarget, string]> = [
-    ["codeden://", { kind: "home" }, "/"],
-    ["codeden://inbox", { kind: "inbox" }, "/inbox"],
-    ["codeden://session/s_123", { kind: "session", sessionId: "s_123" }, "/sessions/s_123"],
-    ["codeden://project/p-9", { kind: "project", projectId: "p-9" }, "/projects/p-9"],
-    ["codeden://settings", { kind: "settings", section: null }, "/settings"],
-    ["codeden://settings/desktop", { kind: "settings", section: "desktop" }, "/settings/desktop"],
+    ["codeharden://", { kind: "home" }, "/"],
+    ["codeharden://inbox", { kind: "inbox" }, "/inbox"],
+    ["codeharden://session/s_123", { kind: "session", sessionId: "s_123" }, "/sessions/s_123"],
+    ["codeharden://project/p-9", { kind: "project", projectId: "p-9" }, "/projects/p-9"],
+    ["codeharden://settings", { kind: "settings", section: null }, "/settings"],
+    [
+      "codeharden://settings/desktop",
+      { kind: "settings", section: "desktop" },
+      "/settings/desktop",
+    ],
   ];
 
   it("parses links into targets and routes", () => {
@@ -114,19 +118,22 @@ describe("codeden:// links", () => {
   });
 
   it("accepts trailing slashes and the scheme in any case", () => {
-    expect(parseDeepLink("codeden://session/abc/")).toEqual({ kind: "session", sessionId: "abc" });
-    expect(parseDeepLink("CODEDEN://inbox")).toEqual({ kind: "inbox" });
+    expect(parseDeepLink("codeharden://session/abc/")).toEqual({
+      kind: "session",
+      sessionId: "abc",
+    });
+    expect(parseDeepLink("CODEHARDEN://inbox")).toEqual({ kind: "inbox" });
   });
 
   it("rejects other schemes, unknown targets and odd ids", () => {
     for (const url of [
       "https://example.com/session/abc",
-      "codeden://unknown",
-      "codeden://session",
-      "codeden://session/a/b",
-      "codeden://session/..%2F..%2Fapi",
-      "codeden://session/%3Cscript%3E",
-      "codeden://inbox/extra",
+      "codeharden://unknown",
+      "codeharden://session",
+      "codeharden://session/a/b",
+      "codeharden://session/..%2F..%2Fapi",
+      "codeharden://session/%3Cscript%3E",
+      "codeharden://inbox/extra",
       "not a url",
     ]) {
       expect(parseDeepLink(url), url).toBeNull();

@@ -16,7 +16,7 @@ const terminalText = (page: Page) =>
 test("without the launch token the server stays locked", async ({ page }) => {
   const origin = new URL(launchUrl()).origin;
   await page.goto(origin);
-  await expect(page.getByText("CodeDen is locked")).toBeVisible();
+  await expect(page.getByText("CodeHarden is locked")).toBeVisible();
   const res = await page.request.get(`${origin}/api/snapshot`);
   expect(res.status()).toBe(401);
 });
@@ -28,7 +28,7 @@ test("an expired cookie shows the open-from-terminal screen", async ({ page, con
   // Any API call now answers 401, and the app swaps to the friendly screen.
   await page.getByRole("button", { name: "Re-check" }).click();
   await expect(page.getByTestId("unauthorized")).toBeVisible();
-  await expect(page.getByText("Open CodeDen from the terminal link")).toBeVisible();
+  await expect(page.getByText("Open CodeHarden from the terminal link")).toBeVisible();
 });
 
 test("M1 flow with the Fake provider", async ({ page }) => {

@@ -1,6 +1,8 @@
 import {
   CODEDEN_VERSION,
+  HARDEN_PRODUCT_NAME,
   HealthResponse,
+  hardenReleaseUrl,
   ReleaseNotes,
   type UpdateInstallRequest,
   UpdateStatus,
@@ -45,7 +47,9 @@ export function httpUpdatesApi(http: Fetcher, origin: string): UpdatesApi {
 /** The mock client is always up to date and running from source. */
 export function mockUpdatesApi(): UpdatesApi {
   const unavailable = () =>
-    Promise.reject(new Error("You're running CodeDen from source: pull and rebuild to update."));
+    Promise.reject(
+      new Error(`You're running ${HARDEN_PRODUCT_NAME} from source: pull and rebuild to update.`),
+    );
   return {
     install: unavailable,
     restart: unavailable,
@@ -53,7 +57,7 @@ export function mockUpdatesApi(): UpdatesApi {
     notes: async (version) => ({
       version,
       body: `### What's new in ${version}\n\n- Mock release notes.`,
-      url: `https://github.com/leonvanzyl/codeden/releases/tag/v${version}`,
+      url: hardenReleaseUrl(version),
     }),
     serverVersion: async () => CODEDEN_VERSION,
   };

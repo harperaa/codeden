@@ -105,6 +105,20 @@ export async function holdIssue(
   if (issue.state !== "open") {
     throw conflict(`Issue #${issue.number} is closed: there is nothing to hold`, "issue_closed");
   }
+  // A hold a person placed stays theirs: the PM holding the issue again doesn't make it its own
+  // (which `releaseIssue` would then let it take off).
+  const held = ctx.store.loopOrNew(projectId, ctx.now()).holds;
+  const own = held.some((h) => h.issueNumber === issue.number && h.by === "pm");
+  if (by === "pm" && issue.labels.includes(FACTORY_HOLD_LABEL) && !own) {
+    const waiting = itemOf(ctx, projectId, issue.number);
+    return {
+      issueNumber: issue.number,
+      held: true,
+      itemId: waiting?.id ?? null,
+      stage: waiting?.stage ?? null,
+      message: `#${issue.number} is already held by a person: it stays their hold, and they release it.`,
+    };
+  }
   await ctx.github.labelIssue(projectId, issue.number, [FACTORY_HOLD_LABEL]);
   const record: FactoryHold = {
     issueNumber: issue.number,
@@ -137,7 +151,7 @@ export async function holdIssue(
 /**
  * `factory_release_issue`: take the hold label off and drop the record. The loop picks the issue
  * up on its next tick: intake takes it in, or its parked item goes on from the queue. An issue
- * that wasn't held is answered as such, never refused.
+ * that wasn't held is answered as such, never refused. The PM (`by`) releases only its own holds.
  */
 export async function releaseIssue(
   ctx: FactoryContext,
@@ -153,6 +167,17 @@ export async function releaseIssue(
   const result = { issueNumber: issue.number, held: false, itemId: item?.id ?? null };
   if (!labelled && !recorded) {
     return { ...result, stage: item?.stage ?? null, message: `#${issue.number} wasn't held.` };
+  }
+  // The PM releases only a hold it placed itself. A label a person put on the issue (on GitHub,
+  // or through the app) stays until a person takes it off.
+  const own = loop.holds.some((h) => h.issueNumber === issue.number && h.by === "pm");
+  if (by === "pm" && labelled && !own) {
+    return {
+      ...result,
+      held: true,
+      stage: item?.stage ?? null,
+      message: `#${issue.number} is held by a person, not by you: it stays held until they take the \`${FACTORY_HOLD_LABEL}\` label off the issue.`,
+    };
   }
   if (labelled) await ctx.github.unlabelIssue(projectId, issue.number, [FACTORY_HOLD_LABEL]);
   if (recorded) {

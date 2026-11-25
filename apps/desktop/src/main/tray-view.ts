@@ -1,4 +1,9 @@
-import type { ActivitySummary, DesktopUpdateState } from "@codeden/contracts";
+import {
+  type ActivitySummary,
+  type DesktopUpdateState,
+  HARDEN_PRODUCT_NAME,
+  hardenVersionOf,
+} from "@codeden/contracts";
 
 export interface TrayInput {
   /** Latest counts from the server, null before the first answer. */
@@ -30,7 +35,9 @@ export function trayView(input: TrayInput): TrayView {
   const { activity, update } = input;
   const lines: string[] = [];
   if (!input.connected || !activity) {
-    lines.push(input.connected ? "Starting..." : "Not connected to the CodeDen server");
+    lines.push(
+      input.connected ? "Starting..." : `Not connected to the ${HARDEN_PRODUCT_NAME} server`,
+    );
   } else {
     lines.push(
       activity.running > 0
@@ -50,7 +57,7 @@ export function trayView(input: TrayInput): TrayView {
           .join(", ") || "idle"
       : "not connected";
   return {
-    tooltip: `CodeDen (${summary})`,
+    tooltip: `${HARDEN_PRODUCT_NAME} (${summary})`,
     lines,
     badge: activity && input.connected ? Math.max(activity.inbox, activity.waiting) : 0,
     update: updateItem(update, input.autoUpdate),
@@ -61,16 +68,24 @@ function updateItem(update: DesktopUpdateState, auto: boolean): TrayView["update
   if (update.unsupported || !update.latest) return null;
   switch (update.phase) {
     case "available":
-      return auto ? null : { label: `Download CodeDen ${update.latest}`, command: "download" };
+      return auto
+        ? null
+        : {
+            label: `Download ${HARDEN_PRODUCT_NAME} ${hardenVersionOf(update.latest)}`,
+            command: "download",
+          };
     case "downloading":
       return {
-        label: `Downloading CodeDen ${update.latest}${update.percent === null ? "" : ` (${Math.floor(update.percent)}%)`}`,
+        label: `Downloading ${HARDEN_PRODUCT_NAME} ${hardenVersionOf(update.latest)}${update.percent === null ? "" : ` (${Math.floor(update.percent)}%)`}`,
         command: null,
       };
     case "downloaded":
-      return { label: `Restart to update to ${update.latest}`, command: "install" };
+      return {
+        label: `Restart to update to ${hardenVersionOf(update.latest)}`,
+        command: "install",
+      };
     case "installing":
-      return { label: `Updating to ${update.latest}...`, command: null };
+      return { label: `Updating to ${hardenVersionOf(update.latest)}...`, command: null };
     default:
       return null;
   }

@@ -208,7 +208,7 @@ export function isKnownFolder(target: string, ctx: PathContext): boolean {
   const here = hereLength(written, ctx);
   const raw = here > 0 ? `.${written.slice(here)}` : written;
   if (/^[+-]\d*$/.test(raw) || /^~[^\\/]/.test(raw)) return false;
-  if (/[*?[`]|^\(|\{[^}]*\}/.test(raw)) return false;
+  if (/[*?[`]|^\(|\{[^{}]*\}/.test(raw)) return false;
   const value = expand(target, ctx);
   if (/[$%]/.test(value)) return false;
   if (rooted(value, ctx)) return true;

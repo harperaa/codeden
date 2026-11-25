@@ -569,7 +569,7 @@ Each phase is one pull request well under 5,000 changed lines, written as an iss
 
 **Scope.**
 - Settings: turn Upstash Box on, an API key into the keychain, a test (list boxes), box size, and the concurrency cap.
-- `@upstash/box` installed on demand into `<home>/deps` and pinned, like the Agent SDK (§5 of DESIGN), so `npx codeden` stays lean.
+- `@upstash/box` installed on demand into `<home>/deps` and pinned, like the Agent SDK (§5 of DESIGN), so `npx codeharden` stays lean.
 - "Prepare the Upstash image": a builder box (node runtime) installs `build-essential`, `codeden@<version>` and Chromium, then a snapshot `codeden-runner-<version>`, with the builder deleted.
 - Provision from the snapshot with `initCommand` starting the runner detached and labels for the sweep. `openLink` through `box.exec.session` running `codeden runner-link`.
 - Pause, resume, delete.
@@ -608,7 +608,7 @@ Each phase is one pull request well under 5,000 changed lines, written as an iss
 
 **Scope.**
 - `docs/self-hosting.md`: a server on a VPS (home, port, service unit), the UI over the user's VPN (§15.1), the home runner and agent CLIs on the server, Docker on the same host or Upstash Box, credentials, costs, upgrades (new image or snapshot per version), backups (`codeden.db`), and troubleshooting.
-- `codeden doctor` lists backends and their status.
+- `codeharden doctor` lists backends and their status.
 
 **Acceptance criteria.**
 - [ ] Following the guide on a clean Linux VM gives a working Fake session in a Docker sandbox.

@@ -1,5 +1,6 @@
+import { FACTORY_HOLD_LABEL } from "@codeden/contracts";
 import { z } from "zod";
-import { defineTool } from "../../define";
+import { defineTool, ToolError } from "../../define";
 import { inGithubProject } from "../github/available";
 import { githubProject } from "../shared/helpers";
 
@@ -52,8 +53,20 @@ export const triageIssue = defineTool({
     comment: z.string().min(1).max(10_000).optional(),
     close: z.boolean().optional(),
   }),
-  handler: async ({ number, ...triage }, { services, projectId }) =>
-    services.orchestration.github.triageIssue(githubProject(services, projectId), number, triage),
+  handler: async ({ number, ...triage }, { services, projectId }) => {
+    // A hold is placed and lifted by the tools that know whose it is, never as a triage label.
+    const named = [...(triage.labels ?? []), ...(triage.removeLabels ?? [])];
+    if (named.some((label) => label.trim().toLowerCase() === FACTORY_HOLD_LABEL)) {
+      throw new ToolError(
+        `The \`${FACTORY_HOLD_LABEL}\` label isn't a triage label: hold an issue with factory_hold_issue and release your own hold with factory_release_issue. A hold a person placed is theirs to lift.`,
+      );
+    }
+    return services.orchestration.github.triageIssue(
+      githubProject(services, projectId),
+      number,
+      triage,
+    );
+  },
 });
 
 /** `create_issue` (§8.3). */

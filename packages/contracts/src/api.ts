@@ -47,7 +47,7 @@ export const ProjectSource = z.discriminatedUnion("type", [
     url: z.string().min(1),
     /**
      * Exact target folder. When omitted the repo is cloned into `<parentDir>/<repo>`, with
-     * `parentDir` defaulting to `~/codeden-projects`.
+     * `parentDir` defaulting to `~/codeharden-projects`.
      */
     path: z.string().min(1).optional(),
     parentDir: z.string().min(1).optional(),

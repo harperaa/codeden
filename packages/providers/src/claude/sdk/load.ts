@@ -1,3 +1,4 @@
+import { HARDEN_COMMAND } from "@codeden/contracts";
 import {
   type ClaudeSdkModule,
   importClaudeSdkFrom,
@@ -67,7 +68,7 @@ async function load(): Promise<ClaudeSdkModule> {
     const reason = error instanceof Error ? error.message : String(error);
     throw new Error(
       `Claude Code support could not be installed into ${depsDir}: ${reason}. ` +
-        "Start the session again to retry, use Settings > First-run setup, or run `codeden doctor --install`.",
+        `Start the session again to retry, use Settings > First-run setup, or run \`${HARDEN_COMMAND} doctor --install\`.`,
     );
   }
 }

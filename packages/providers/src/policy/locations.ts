@@ -65,7 +65,11 @@ function afterCd<T extends PathContext>(cmd: SimpleCommand, ctx: T): T[] {
   }
   if (!CD.has(bin)) return [ctx];
   const { stack, args } = withoutStackName(tokens.slice(1));
-  const target = cdTarget(args);
+  // cmd's `/d` is a switch only where cmd may be the shell: on Windows, unless the shell is known
+  // to be a POSIX one (Git Bash) or PowerShell, whose `cd` takes `/d` for a folder like any other.
+  const shell = (ctx as { shell?: string }).shell;
+  const cmdSwitch = isWin(ctx) && shell !== "posix" && shell !== "powershell";
+  const target = cdTarget(args, cmdSwitch);
   if (PUSH.has(bin)) {
     const saved: SavedLocation = { dir: ctx.dir, psDrive: ctx.psDrive, stack };
     // With no location, `Push-Location` saves the current one and stays.
@@ -73,7 +77,10 @@ function afterCd<T extends PathContext>(cmd: SimpleCommand, ctx: T): T[] {
     return [{ ...moved, pushed: [...(ctx.pushed ?? []), saved] }];
   }
   if (stack !== undefined) return [{ ...ctx, pushed: undefined }];
-  return [moveTo(target ?? "~", ctx)];
+  const moved = moveTo(target ?? "~", ctx);
+  // The shell isn't known: one that isn't cmd refuses `cd /d dir` and stays where it is.
+  const refused = cmdSwitch && args.length > 1 && /^\/d$/i.test(args[0] ?? "");
+  return refused ? [moved, ctx] : [moved];
 }
 
 /**
@@ -199,7 +206,7 @@ const CD_SWITCHES = ["passthru", "verbose", "debug", "whatif", "confirm"];
  * (#614). A word after a parameter that isn't a switch (`-ErrorAction Stop`) is its value. None
  * for no folder.
  */
-function cdTarget(args: string[]): string | undefined {
+function cdTarget(args: string[], cmdSwitch: boolean): string | undefined {
   // `pushd +1` and `pushd -1` rotate the stack, which may hold folders from earlier commands.
   if (args.some((a) => /^[+-]\d*$/.test(a))) return "-";
   const named = namedArg(args, ["-path", "-literalpath"]);
@@ -211,7 +218,8 @@ function cdTarget(args: string[]): string | undefined {
       operands.push(...args.slice(i + 1));
       break;
     }
-    if (i === 0 && args.length > 1 && /^\/d$/i.test(arg)) continue;
+    // Only cmd has `/d`. Elsewhere it is one more operand, and two are a folder not known here.
+    if (cmdSwitch && i === 0 && args.length > 1 && /^\/d$/i.test(arg)) continue;
     if (!arg.startsWith("-")) operands.push(arg);
     else if (!CD_FLAGS.test(arg) && !arg.includes(":")) {
       const name = arg.slice(1).toLowerCase();

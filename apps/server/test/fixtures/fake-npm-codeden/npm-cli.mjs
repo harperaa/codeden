@@ -1,7 +1,8 @@
 // Stand-in for npm in the self-update installer tests: "installs" a tiny codeden package into
 // --prefix whose dist/cli.js prints its version. Records each call in calls.log next to the
 // app folder. FAKE_NPM_FAIL=1 exits non-zero; FAKE_NPM_REPORT overrides the printed version;
-// FAKE_NPM_DELAY_MS slows it down.
+// FAKE_NPM_DELAY_MS slows it down. The package is the one named in the install spec;
+// FAKE_NPM_NAME makes its package.json name another one (a mislabelled tarball).
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
@@ -24,9 +25,13 @@ if (process.env.FAKE_NPM_FAIL === "1") {
 }
 const spec = args[args.indexOf("install") + 1];
 const version = spec.slice(spec.lastIndexOf("@") + 1);
-const root = join(prefix, "node_modules", "codeden");
+const name = spec.slice(0, spec.lastIndexOf("@"));
+const root = join(prefix, "node_modules", name);
 mkdirSync(join(root, "dist", "web"), { recursive: true });
-writeFileSync(join(root, "package.json"), JSON.stringify({ name: "codeden", version }));
+writeFileSync(
+  join(root, "package.json"),
+  JSON.stringify({ name: process.env.FAKE_NPM_NAME ?? name, version }),
+);
 const reported = process.env.FAKE_NPM_REPORT ?? version;
 writeFileSync(join(root, "dist", "cli.js"), `console.log(${JSON.stringify(reported)});\n`);
 writeFileSync(join(root, "dist", "runner.js"), "");

@@ -1,3 +1,4 @@
+import { HARDEN_PRODUCT_NAME } from "@codeden/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
 import { Markdown } from "@/components/thread/markdown";
@@ -37,8 +38,12 @@ export function WhatsNewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl" data-testid="whats-new">
         <DialogHeader>
-          <DialogTitle>What's new in CodeDen {version}</DialogTitle>
-          <DialogDescription>Release notes from the CodeDen repository.</DialogDescription>
+          <DialogTitle>
+            What's new in {HARDEN_PRODUCT_NAME} {version}
+          </DialogTitle>
+          <DialogDescription>
+            Release notes from the {HARDEN_PRODUCT_NAME} repository.
+          </DialogDescription>
         </DialogHeader>
         <div className="max-h-[50vh] overflow-y-auto text-sm">
           {notes.isPending ? (

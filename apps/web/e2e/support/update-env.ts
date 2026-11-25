@@ -16,7 +16,9 @@ import {
 import { installPublishedCopy } from "../../../cli/test/support/published-install";
 import { sweepProcesses } from "./process-sweep";
 
-export const NEXT_VERSION = "99.0.0-test";
+/** CodeHarden versions in their npm form: what the copy runs, and the newer one on the registry. */
+export const CURRENT_VERSION = "2026.1122.2006";
+export const NEXT_VERSION = "2026.1123.905";
 
 export interface UpdateEnv {
   launchUrl: string;
@@ -37,7 +39,7 @@ export async function startUpdateEnv(): Promise<UpdateEnv> {
   }
   const base = realpathSync.native(mkdtempSync(join(tmpdir(), "codeden-e2e-update-")));
   const home = join(base, "home");
-  const entry = installPublishedCopy(base, { linkDeps: true });
+  const entry = installPublishedCopy(base, { version: CURRENT_VERSION, linkDeps: true });
   const registry = await startFakeRegistry();
   registry.publish(NEXT_VERSION, packCli({ version: NEXT_VERSION, stripDependencies: true }));
   const env: NodeJS.ProcessEnv = {
@@ -51,8 +53,9 @@ export async function startUpdateEnv(): Promise<UpdateEnv> {
     CODEDEN_GITHUB_SYNC: "0",
     CODEDEN_DEBUG: "1",
   };
+  // The updater's probe: the bare package version (plain `--version` prints the version line).
   const current = spawnSync(process.execPath, [entry, "--version"], {
-    env,
+    env: { ...env, CODEDEN_NO_SWITCH: "1" },
     encoding: "utf8",
   }).stdout.trim();
   let output = "";

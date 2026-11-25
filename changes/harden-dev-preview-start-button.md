@@ -1,0 +1,6 @@
+---
+section: fixed
+---
+
+- **The dev preview's settings always have something to press.** Settings that were stored and unchanged showed their values over a dimmed **Save changes…** and nothing else, so a preview that wasn't running (after the app started on a project with automatic merges, after **Stop all**, after a failed start) could only be started from the PM thread, or by changing a field to wake the button up. The button under the form now follows the state: a green **Start preview…** when nothing is stored yet and the fields hold a command, whether you typed it or it was filled in; **Save changes…** once you change stored settings; **Confirm again…** when the project's base branch changed; and for stored, unchanged settings no save button at all, but **Confirmed** with the time, how the PM thread's preview is doing, and **Restart** or **Start preview** when it isn't running, or the reason it can't be started from there. Everything that stores a command still asks **Run these commands on this computer?** first; starting commands you already confirmed asks nothing, as on the PM thread.
+- **A space is not a change.** The form is compared as it would be stored, so a space after a command or between port variables no longer enables saving, and a real edit always does.

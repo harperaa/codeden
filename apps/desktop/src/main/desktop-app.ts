@@ -3,6 +3,10 @@ import {
   type DesktopInfo,
   type DesktopUpdateCommand,
   deepLinkPath,
+  formatHardenVersion,
+  HARDEN_PRODUCT_NAME,
+  hardenDocsUrl,
+  hardenVersionOf,
   parseDeepLink,
 } from "@codeden/contracts";
 import { app, dialog, Menu, Notification, shell } from "electron";
@@ -35,7 +39,7 @@ import { loadUpdater, waitForRunnerExit } from "./updates/updater";
 import { MainWindow } from "./window";
 import { windowShot } from "./window-shot";
 
-const DOCS_URL = "https://github.com/leonvanzyl/codeden/blob/main/docs/desktop.md";
+const DOCS_URL = hardenDocsUrl("desktop.md");
 /** Longest a quit may take (browser hand-off 15 s + server stop up to 30 s) before it's forced. */
 const QUIT_LIMIT_MS = 45_000;
 
@@ -94,7 +98,7 @@ export class DesktopApp {
   }
 
   async start(): Promise<void> {
-    this.log(`app: CodeDen ${app.getVersion()} starting (home ${this.args.home})`);
+    this.log(`app: ${formatHardenVersion()} starting (home ${this.args.home})`);
     const unsupported = updateSupport({
       packaged: app.isPackaged,
       platform: process.platform,
@@ -126,7 +130,7 @@ export class DesktopApp {
     });
     Menu.setApplicationMenu(Menu.buildFromTemplate(this.menu()));
     this.tray = new AppTray(
-      this.asset(process.platform === "darwin" ? "trayTemplate.png" : "tray.png"),
+      this.asset(process.platform === "darwin" ? "harden/trayTemplate.png" : "harden/tray.png"),
       {
         open: () => this.show(),
         openInbox: () => this.navigate("/inbox"),
@@ -136,7 +140,7 @@ export class DesktopApp {
     );
     this.window = new MainWindow({
       preload: join(this.dist, "preload.cjs"),
-      icon: this.asset("icon.png"),
+      icon: this.asset("harden/icon.png"),
       stateFile: join(homeFiles(this.args.home).desktop, "window-state.json"),
       show: !this.args.hidden && !openedAtLogin(),
       hideOnClose: () => this.status.settings?.desktop.closeToTray ?? true,
@@ -162,7 +166,7 @@ export class DesktopApp {
       window: () => this.window.window,
       showWindow: () => this.show(),
       setBadge: (count) => this.badge.set(count),
-      icon: this.asset("icon.png"),
+      icon: this.asset("harden/icon.png"),
       log: this.log,
       browser: this.browser.browsers,
     });
@@ -192,8 +196,8 @@ export class DesktopApp {
       this.log(`app: no server: ${String(error)}`);
       await dialog.showMessageBox({
         type: "error",
-        title: "CodeDen could not start",
-        message: "CodeDen could not start its server.",
+        title: `${HARDEN_PRODUCT_NAME} could not start`,
+        message: `${HARDEN_PRODUCT_NAME} could not start its server.`,
         detail: `${error instanceof Error ? error.message : String(error)}\n\nSee ${homeFiles(this.args.home).logs}.`,
       });
       await this.window.showRecovery();
@@ -387,8 +391,8 @@ export class DesktopApp {
     }
     const { response } = await dialog.showMessageBox({
       type: "error",
-      title: "CodeDen",
-      message: "The CodeDen server stopped unexpectedly.",
+      title: HARDEN_PRODUCT_NAME,
+      message: `The ${HARDEN_PRODUCT_NAME} server stopped unexpectedly.`,
       detail: `Agents keep running in the runner. See ${homeFiles(this.args.home).logs}.`,
       buttons: ["Restart", "Quit"],
       defaultId: 0,
@@ -449,10 +453,10 @@ export class DesktopApp {
     if (this.notifiedUpdate === key) return;
     this.notifiedUpdate = key;
     new Notification({
-      title: `CodeDen ${state.latest} is ${state.phase === "downloaded" ? "ready" : "available"}`,
+      title: `${HARDEN_PRODUCT_NAME} ${hardenVersionOf(state.latest)} is ${state.phase === "downloaded" ? "ready" : "available"}`,
       body:
         state.phase === "downloaded"
-          ? "It installs when you quit CodeDen, or choose Restart to update in the tray menu."
+          ? `It installs when you quit ${HARDEN_PRODUCT_NAME}, or choose Restart to update in the tray menu.`
           : "Download it from the tray menu.",
     }).show();
   }

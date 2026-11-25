@@ -56,6 +56,7 @@ const SERVER_PROCESS_TESTS = [
   "test/restart-recovery.test.ts",
   "test/browser.test.ts",
   "test/browser-native.test.ts",
+  "test/dev-preview-process.test.ts",
 ];
 const DESKTOP_PROCESS_TESTS = ["test/relay-chromium.test.ts"];
 
@@ -73,7 +74,9 @@ const SERVER_RUNNER_TESTS = readdirSync(join(SERVER_ROOT, "test"))
     const source = readFileSync(join(SERVER_ROOT, file), "utf8");
     return (
       source.includes("startHarness(") ||
-      (source.includes("startServer(") && !source.includes("runner: false"))
+      (source.includes("startServer(") && !source.includes("runner: false")) ||
+      // CodeHarden: suites that build git repositories and worktrees per test get the same room.
+      source.includes("createRepos(")
     );
   });
 /** Runner suites that build git worktrees and checkpoints, many per test. */

@@ -1,6 +1,6 @@
 # The CodeDen runner image (docs/remote-runners.md §5.2): the whole runner, run as a non-root
 # user in a container of its own per agent session. The server's Docker backend builds it on
-# first use as codeden-runner:<version>, from this file and the package's own bundle; it is
+# first use as <product>-runner:<version>, from this file and the package's own bundle; it is
 # never published. Nothing secret is ever part of it: no token, key or login is copied in or
 # set in its environment. The GitHub token reaches a container only inside a runner command
 # over the link, for one git process at a time.

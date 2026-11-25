@@ -1,0 +1,5 @@
+---
+section: changed
+---
+
+- **Updates come from CodeHarden's own channel, never from upstream CodeDen.** The update check, "Update now", `update` in the terminal and the launcher use the npm package `codeharden`: versions install side by side into `~/.codeden/app/<version>/node_modules/codeharden`, a downloaded package that isn't `codeharden` is refused, and a CodeDen version left in the same home by upstream's updater is never started. The desktop app looks for updates in the GitHub releases of `harperaa/codeharden`, and "What's new", the release page, the desktop download link and the Docs menu open that repository too. A release tag keeps the full CodeHarden version (`v2026.0105.0518`) while npm drops the leading zeros (`2026.105.518`); links are built from the full form. The messages that tell you what to type (`npx codeharden`, `npm i -g codeharden@latest`, `codeharden update`) name the new package. A repository with no desktop release yet is reported as "up to date", not as an error.

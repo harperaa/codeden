@@ -8,17 +8,19 @@
  * `--home` is a fully separate app (tests rely on this).
  */
 import { resolve } from "node:path";
-import { DEEP_LINK_SCHEME } from "@codeden/contracts";
+import { DEEP_LINK_SCHEME, HARDEN_APP_ID, HARDEN_PRODUCT_NAME } from "@codeden/contracts";
 import { app } from "electron";
 import { parseLaunchArgs } from "./args";
 import { DesktopApp } from "./desktop-app";
+import { hardenAboutPanel } from "./harden-display";
 import { redactToken } from "./security";
 import { homeFiles } from "./server-plan";
 
 const args = parseLaunchArgs(process.argv.slice(1));
-app.setName("CodeDen");
+app.setName(HARDEN_PRODUCT_NAME);
+app.setAboutPanelOptions(hardenAboutPanel());
 app.setPath("userData", homeFiles(args.home).desktop);
-if (process.platform === "win32") app.setAppUserModelId("dev.codeden.app");
+if (process.platform === "win32") app.setAppUserModelId(HARDEN_APP_ID);
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();

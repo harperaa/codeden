@@ -10,6 +10,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join, relative, resolve } from "node:path";
 import { gunzipSync, gzipSync } from "node:zlib";
+import { HARDEN_COMMAND, HARDEN_PACKAGE_NAME } from "@codeden/contracts";
 
 /** The published package folder (`apps/cli`), with `dist/` built. */
 export const CLI_ROOT = resolve(import.meta.dirname, "../..");
@@ -18,6 +19,11 @@ export interface PackOptions {
   version: string;
   /** Drop `dependencies` (native modules, playwright-core) so npm installs nothing else. */
   stripDependencies?: boolean;
+  /**
+   * The name in the tarball's package.json. Default: the channel's package, as a release packs
+   * it; pass another name for a tarball that must be refused.
+   */
+  name?: string;
 }
 
 /** Pack the current build like `npm pack` (dist, README, LICENSE), relabelled as `version`. */
@@ -27,6 +33,9 @@ export function packCli(opts: PackOptions): Buffer {
     unknown
   >;
   pkg.version = opts.version;
+  // What packing a release does: the repository's package.json keeps upstream's name.
+  pkg.name = opts.name ?? HARDEN_PACKAGE_NAME;
+  pkg.bin = { [HARDEN_COMMAND]: "./dist/cli.js" };
   delete pkg.devDependencies;
   delete pkg.scripts;
   if (opts.stripDependencies) delete pkg.dependencies;
@@ -104,6 +113,9 @@ export interface FakeRegistry {
   close(): Promise<void>;
 }
 
+/** The one package the registry serves: the update channel's. */
+const NAME = HARDEN_PACKAGE_NAME;
+
 /** Start the registry on a free 127.0.0.1 port. */
 export async function startFakeRegistry(
   opts: { upstream?: string; notes?: (version: string) => string } = {},
@@ -120,17 +132,17 @@ export async function startFakeRegistry(
       res.writeHead(status, { "content-type": "application/json" });
       res.end(JSON.stringify(body));
     };
-    if (url === "/-/package/codeden/dist-tags") return json(200, { latest });
-    if (url === "/codeden" || url === "/codeden/") {
+    if (url === `/-/package/${NAME}/dist-tags`) return json(200, { latest });
+    if (url === `/${NAME}` || url === `/${NAME}/`) {
       return json(200, {
-        name: "codeden",
+        name: NAME,
         "dist-tags": latest ? { latest } : {},
         versions: Object.fromEntries([...versions].map(([v, e]) => [v, e.manifest])),
       });
     }
-    const tgz = /^\/codeden\/-\/codeden-(.+)\.tgz$/.exec(url);
-    if (tgz) {
-      const entry = versions.get(tgz[1] as string);
+    const tgzPrefix = `/${NAME}/-/${NAME}-`;
+    if (url.startsWith(tgzPrefix) && url.endsWith(".tgz")) {
+      const entry = versions.get(url.slice(tgzPrefix.length, -".tgz".length));
       if (!entry) return json(404, { error: "not found" });
       res.writeHead(200, { "content-type": "application/octet-stream" });
       res.end(entry.tarball);
@@ -160,10 +172,10 @@ export async function startFakeRegistry(
         tarball,
         manifest: {
           ...pkg,
-          name: "codeden",
+          name: NAME,
           version,
           dist: {
-            tarball: `${base}/codeden/-/codeden-${version}.tgz`,
+            tarball: `${base}/${NAME}/-/${NAME}-${version}.tgz`,
             shasum: createHash("sha1").update(tarball).digest("hex"),
             integrity: `sha512-${createHash("sha512").update(tarball).digest("base64")}`,
           },

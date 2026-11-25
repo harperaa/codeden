@@ -2,6 +2,7 @@ import type { ProviderCommand, UserInput } from "@codeden/contracts";
 import { type OpenCodeClient, OpenCodeHttpError } from "./client";
 import { type OcPromptBody, toPromptBody } from "./config";
 import type { TurnOutcome } from "./errors";
+import { hardenListedCommands } from "./harden-commands";
 import type { OcCommandInfo, OcSkillInfo } from "./protocol";
 
 /**
@@ -233,7 +234,10 @@ export class OpenCodeCommands {
         client.get<{ data?: OcCommandInfo[] }>(`/api/command?${location}`),
         client.get<{ data?: OcSkillInfo[] }>(`/api/skill?${location}`),
       ]);
-      commands = (c?.data ?? []).filter((x) => typeof x?.name === "string" && x.name);
+      // CodeHarden: none for now (`./harden-commands`), so `/<name>` stays a plain prompt.
+      commands = hardenListedCommands(
+        (c?.data ?? []).filter((x) => typeof x?.name === "string" && x.name),
+      );
       skills = (s?.data ?? []).filter((x) => typeof x?.id === "string" && x.id);
     } catch {
       // An OpenCode without these routes: `/` text stays a prompt.

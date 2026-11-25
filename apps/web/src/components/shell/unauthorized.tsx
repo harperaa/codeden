@@ -1,5 +1,7 @@
+import { HARDEN_NPX_COMMAND } from "@codeden/contracts";
 import { KeyRound, TerminalSquare } from "lucide-react";
 import { Logo } from "./logo";
+import { Wordmark } from "./wordmark";
 
 /**
  * Shown after a 401: this browser has no valid CodeDen cookie. The token only arrives through
@@ -15,7 +17,7 @@ export function UnauthorizedScreen() {
       <div className="relative w-full max-w-md text-center" data-testid="unauthorized">
         <Logo className="mx-auto mb-5 size-12" />
         <h1 className="text-xl font-semibold tracking-tight">
-          Open CodeDen from the terminal link
+          Open <Wordmark /> from the terminal link
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           This browser isn't signed in to your local CodeDen server. For your safety the UI only
@@ -26,7 +28,9 @@ export function UnauthorizedScreen() {
             <TerminalSquare className="mt-0.5 size-4 shrink-0 text-primary" />
             <span>
               Run{" "}
-              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">npx codeden</code>{" "}
+              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+                {HARDEN_NPX_COMMAND}
+              </code>{" "}
               again. It finds the running server and opens an authenticated tab.
             </span>
           </div>

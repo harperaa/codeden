@@ -1,4 +1,10 @@
-import type { BackendStatus, SandboxRef, SandboxSpec, SandboxSummary } from "@codeden/contracts";
+import {
+  type BackendStatus,
+  HARDEN_APP_SLUG,
+  type SandboxRef,
+  type SandboxSpec,
+  type SandboxSummary,
+} from "@codeden/contracts";
 
 /**
  * Argument lists for every `docker` command the Docker backend runs, and parsers for their
@@ -14,19 +20,26 @@ export const SANDBOX_USER = "1000:1000";
 /** The oldest Docker Engine API CodeDen drives: Docker 20.10. */
 export const MIN_DOCKER_API = "1.41";
 export const MIN_DOCKER_VERSION = "20.10";
-/** Labels on everything the backend makes. */
+/**
+ * Labels on everything the backend makes. They, the image and the container names start with
+ * this product's own word (`HARDEN_APP_SLUG`), not upstream's: two products on one machine share
+ * one Docker, and the image tag's version alone does not tell them apart (a build from a
+ * checkout carries upstream's version), so under one name each would rebuild the image over the
+ * other's. The command names inside the image (`codeden`, `codeden-runner`) are upstream's:
+ * nothing outside a container sees them.
+ */
 export const LABEL = {
-  install: "codeden.install",
-  session: "codeden.session",
-  project: "codeden.project",
-  runner: "codeden.runner",
-  version: "codeden.version",
-  build: "codeden.build",
+  install: `${HARDEN_APP_SLUG}.install`,
+  session: `${HARDEN_APP_SLUG}.session`,
+  project: `${HARDEN_APP_SLUG}.project`,
+  runner: `${HARDEN_APP_SLUG}.runner`,
+  version: `${HARDEN_APP_SLUG}.version`,
+  build: `${HARDEN_APP_SLUG}.build`,
 } as const;
 
-/** The runner image's name for a CodeDen version. */
+/** The runner image's name for a version: `codeharden-runner:<version>`. */
 export function imageName(version: string): string {
-  return `codeden-runner:${version}`;
+  return `${HARDEN_APP_SLUG}-runner:${version}`;
 }
 
 /** `docker version` as JSON: the client's and, when the daemon answers, the server's. */

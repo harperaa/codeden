@@ -1,4 +1,6 @@
 import { defineConfig } from "tsdown";
+import { hardenChannelDefine } from "../../scripts/harden/channel-define.mjs";
+import { hardenVersionDefine } from "../../scripts/harden/version-define.mjs";
 // @ts-expect-error: plain .mjs build helper without type declarations
 import { thirdPartyNotices } from "./scripts/third-party-notices.mjs";
 
@@ -30,6 +32,10 @@ export default defineConfig({
   fixedExtension: false,
   sourcemap: true,
   deps: { onlyBundle: false, neverBundle: ON_DEMAND },
-  define: { __CODEDEN_CLAUDE_SDK_ON_DEMAND__: "true" },
+  define: {
+    __CODEDEN_CLAUDE_SDK_ON_DEMAND__: "true",
+    ...hardenVersionDefine(),
+    ...hardenChannelDefine(),
+  },
   plugins: [thirdPartyNotices({ forbidden: ON_DEMAND })],
 });

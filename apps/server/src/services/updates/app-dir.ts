@@ -1,15 +1,20 @@
 import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { AppPointer, compareVersions, type InstalledVersion } from "@codeden/contracts";
+import {
+  AppPointer,
+  compareVersions,
+  HARDEN_PACKAGE_NAME,
+  type InstalledVersion,
+} from "@codeden/contracts";
 import { readJsonFile, writeJsonFile } from "../../json-file";
 
 /**
- * Side-by-side CodeDen installs (§16): `<home>/app/<version>/node_modules/codeden` per version
+ * Side-by-side installs (§16): `<home>/app/<version>/node_modules/<channel package>` per version
  * and `<home>/app/current.json` naming the one the `codeden` launcher starts. A running
  * version's files are never touched (Windows locks loaded native modules), so updates always
  * go into a new folder and old ones are pruned once nothing runs from them.
  */
-export const PACKAGE_NAME = "codeden";
+export const PACKAGE_NAME = HARDEN_PACKAGE_NAME;
 
 /** Version folder names npm can install: `x.y.z` with an optional prerelease/build tag. */
 const VERSION_DIR = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
@@ -45,7 +50,11 @@ export function isVersionName(name: string): boolean {
 export function installProblem(root: string, version: string): string | null {
   let pkgVersion: unknown;
   try {
-    pkgVersion = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
+    const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+    // Only the channel's own package runs from here, never another one under its name.
+    if (pkg.name !== PACKAGE_NAME)
+      return `it is the package ${String(pkg.name)}, not ${PACKAGE_NAME}`;
+    pkgVersion = pkg.version;
   } catch {
     return "its package.json is missing";
   }

@@ -2,6 +2,7 @@ import { type RiskAssessment, risky, SAFE } from "./assessment";
 import { CODEDEN_WHAT } from "./codeden-command";
 import { codedenAccess, credentialsRisk, forReading } from "./codeden-home";
 import { binName, DISCARD } from "./command-words";
+import { bounded, MAX_COMMAND_CHARS } from "./harden-scan";
 import { inlineScripts, scriptFlag } from "./inline-scripts";
 import { isTempRoot, isUnknownDir, isWritable, type PathContext, resolveAgainst } from "./paths";
 import { readOnlyCommandDenial } from "./read-only";
@@ -125,7 +126,15 @@ export function unknownWorkdirRisk(
 /** True when every command line given only reads (`./read-only`), and at least one is given. */
 function onlyReads(commands: readonly string[], ctx: WorkdirContext): boolean {
   const lines = commands.filter((c) => c.trim());
-  return lines.length > 0 && lines.every((line) => readsOnly(line, ctx.shell ?? "auto", 0));
+  // A line too long or too involved to read (`./harden-scan`) is not known to only read.
+  return bounded(
+    () =>
+      lines.length > 0 &&
+      lines.every(
+        (line) => line.length <= MAX_COMMAND_CHARS && readsOnly(line, ctx.shell ?? "auto", 0),
+      ),
+    false,
+  );
 }
 
 /**

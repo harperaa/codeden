@@ -1,16 +1,18 @@
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+import { HARDEN_HOME_DIRNAME } from "@codeden/contracts";
 
 /**
- * Resolve the data directory (§6): explicit value, then `CODEDEN_HOME`, then `~/.codeden`.
+ * Resolve the data directory (§6): explicit value, then `CODEDEN_HOME`, then the product's own
+ * folder in the user's home (`HARDEN_HOME_DIRNAME`, `~/.codeharden`).
  * Two copies can run side by side with different homes and ports.
  */
 export function resolveHome(explicit?: string): string {
   const fromEnv = process.env.CODEDEN_HOME;
   if (explicit) return resolve(explicit);
   if (fromEnv) return resolve(fromEnv);
-  return join(homedir(), ".codeden");
+  return join(homedir(), HARDEN_HOME_DIRNAME);
 }
 
 /** Well-known paths inside the data directory. */

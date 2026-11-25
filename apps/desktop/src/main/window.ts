@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { BrowserWindow, nativeTheme, type Rectangle, screen, shell } from "electron";
 import { applyContentSecurityPolicy } from "./content-security";
+import { hardenWindowTitle } from "./harden-display";
 import { allowPermission, externalUrl, isServerUrl, redactToken } from "./security";
 import { readWindowState, restoreBounds, type WindowState } from "./window-state";
 import { WindowZoom, type ZoomCommand } from "./zoom";
@@ -44,7 +45,7 @@ export class MainWindow {
       minWidth: 900,
       minHeight: 600,
       show: false,
-      title: "CodeDen",
+      title: hardenWindowTitle(""),
       icon: opts.icon,
       backgroundColor: nativeTheme.shouldUseDarkColors ? "#0b0d10" : "#ffffff",
       autoHideMenuBar: process.platform !== "darwin",
@@ -72,6 +73,11 @@ export class MainWindow {
       const retry = now - this.lastRendererExit >= 30_000;
       this.lastRendererExit = now;
       if (!this.quitting) opts.onRendererGone(details, retry);
+    });
+    // The title bar shows the version line; the page's title only adds its waiting count.
+    this.window.on("page-title-updated", (event, title) => {
+      event.preventDefault();
+      this.window.setTitle(hardenWindowTitle(title));
     });
     this.guard();
     this.trackBounds();

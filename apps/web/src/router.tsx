@@ -35,6 +35,10 @@ const NewAutomationPage = lazyRouteComponent(
   "NewAutomationPage",
 );
 const AutomationsPage = lazyRouteComponent(() => import("@/routes/automations"), "AutomationsPage");
+const DevServersPage = lazyRouteComponent(
+  () => import("@/components/harden/dev-servers/page"),
+  "DevServersPage",
+);
 const FactoryItemPage = lazyRouteComponent(
   () => import("@/routes/factory-item"),
   "FactoryItemPage",
@@ -53,6 +57,10 @@ const SearchPage = lazyRouteComponent(() => import("@/routes/search"), "SearchPa
 const SessionPage = lazyRouteComponent(() => import("@/routes/session"), "SessionPage");
 const SettingsPage = lazyRouteComponent(() => import("@/routes/settings"), "SettingsPage");
 const SetupPage = lazyRouteComponent(() => import("@/routes/setup"), "SetupPage");
+const SecureFoundationSetupPage = lazyRouteComponent(
+  () => import("@/routes/secure-foundation-setup"),
+  "SecureFoundationSetupPage",
+);
 const VisionPage = lazyRouteComponent(() => import("@/routes/vision"), "VisionPage");
 
 /**
@@ -320,6 +328,7 @@ const routeTree = rootRoute.addChildren([
     createRoute({ getParentRoute: () => shell, path: "/", component: HomePage }),
     inboxRoute,
     reportsRoute,
+    createRoute({ getParentRoute: () => shell, path: "/dev-servers", component: DevServersPage }),
     searchRoute,
     sessionRoute,
     projectRoute,
@@ -341,6 +350,11 @@ const routeTree = rootRoute.addChildren([
     agentsRoute,
   ]),
   createRoute({ getParentRoute: () => rootRoute, path: "/setup", component: SetupPage }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/secure-foundation-setup",
+    component: SecureFoundationSetupPage,
+  }),
   factoryViewRoute,
 ]);
 

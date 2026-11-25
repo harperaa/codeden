@@ -1,3 +1,4 @@
+import { MAX_COMMAND_CHARS } from "./harden-scan";
 import { gitDenial } from "./read-only-git";
 import { groupingDenial, optionSensitive, writingOptionDenial } from "./read-only-options";
 import { ghDenial, sedDenial } from "./read-only-tools";
@@ -196,6 +197,9 @@ export function readOnlyCommandDenial(
   command: string,
   options: ReadOnlyCommandOptions = {},
 ): string | undefined {
+  if (command.length > MAX_COMMAND_CHARS) {
+    return "A command this long is not checked, so it is not allowed in a read-only session";
+  }
   if (/\$\(|`|<\(|>\(/.test(command)) {
     return "Command substitution is not allowed in a read-only session";
   }

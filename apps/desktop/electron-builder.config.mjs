@@ -18,6 +18,17 @@
 import { existsSync } from "node:fs";
 import { chmod, cp, readdir } from "node:fs/promises";
 import { join } from "node:path";
+import { readHardenChannel } from "../../scripts/harden/channel-define.mjs";
+
+/**
+ * The GitHub repository the app updates from (CodeHarden's own, never upstream's) and the app's
+ * identity: its name, id, link scheme and file names, so it installs beside upstream CodeDen.
+ * Strict when installers are packed (scripts/package.mjs sets HARDEN_RELEASE_PACK first): a
+ * fork without PACKAGE_NAME is refused there, and only warned when a test or a --dir build
+ * loads this file.
+ */
+const channel = readHardenChannel();
+const { productName, appId, slug } = channel;
 
 /** electron-builder's `Arch` enum values, by name. */
 const ARCH_NAMES = { 0: "ia32", 1: "x64", 2: "armv7l", 3: "arm64", 4: "universal" };
@@ -68,6 +79,9 @@ export async function prepareNativeModules(context) {
   await cp(staged, join(modules, ...binary.split("/")), { recursive: true });
 }
 
+/** The product name as it appears in installer file names (GitHub turns spaces into dots). */
+const fileName = productName.replace(/ /g, "-");
+
 const macSigning = Boolean(process.env.CSC_LINK || process.env.CSC_NAME);
 const notarize = Boolean(
   macSigning &&
@@ -78,8 +92,8 @@ const notarize = Boolean(
 
 /** @type {import("electron-builder").Configuration} */
 export default {
-  appId: "dev.codeden.app",
-  productName: "CodeDen",
+  appId,
+  productName,
   copyright: "Copyright © 2026 Leon van Zyl",
   directories: { app: ".stage/app", output: "release", buildResources: "build" },
   // The runner and server are started from files on disk with the app's binary as Node.js;
@@ -89,8 +103,10 @@ export default {
   npmRebuild: false,
   files: ["**/*", "!**/*.map", "!**/*.d.ts"],
   afterPack: prepareNativeModules,
-  protocols: [{ name: "CodeDen", schemes: ["codeden"] }],
-  publish: [{ provider: "github", owner: "leonvanzyl", repo: "codeden", releaseType: "release" }],
+  protocols: [{ name: productName, schemes: [slug] }],
+  publish: [
+    { provider: "github", owner: channel.owner, repo: channel.repo, releaseType: "release" },
+  ],
   electronFuses: {
     // The server and runner run on the app's binary as Node.js (ELECTRON_RUN_AS_NODE).
     runAsNode: true,
@@ -100,17 +116,18 @@ export default {
   },
   win: {
     target: [{ target: "nsis", arch: ["x64"] }],
-    executableName: "CodeDen",
+    executableName: productName,
+    icon: "build/harden/icon.ico",
   },
   nsis: {
-    // Per-user install: no admin prompt, installs to %LOCALAPPDATA%\Programs\CodeDen.
+    // Per-user install: no admin prompt, installs to %LOCALAPPDATA%\Programs\<name>.
     oneClick: true,
     perMachine: false,
     createDesktopShortcut: true,
     createStartMenuShortcut: true,
-    shortcutName: "CodeDen",
+    shortcutName: productName,
     deleteAppDataOnUninstall: false,
-    artifactName: "CodeDen-Setup-${version}.${ext}",
+    artifactName: `${fileName}-Setup-\${version}.\${ext}`,
   },
   mac: {
     target: [
@@ -119,23 +136,27 @@ export default {
       { target: "zip", arch: ["arm64", "x64"] },
     ],
     category: "public.app-category.developer-tools",
+    icon: "build/harden/icon.icns",
     hardenedRuntime: true,
     entitlements: "build/entitlements.mac.plist",
     entitlementsInherit: "build/entitlements.mac.plist",
     // A Developer ID from CSC_LINK/CSC_NAME when configured, otherwise an ad-hoc signature.
     identity: macSigning ? undefined : "-",
     notarize,
-    extendInfo: { NSMicrophoneUsageDescription: "CodeDen uses the microphone for dictation." },
-    artifactName: "CodeDen-${version}-${arch}.${ext}",
+    extendInfo: {
+      NSMicrophoneUsageDescription: `${productName} uses the microphone for dictation.`,
+    },
+    artifactName: `${fileName}-\${version}-\${arch}.\${ext}`,
   },
-  dmg: { artifactName: "CodeDen-${version}-${arch}.${ext}" },
+  dmg: { artifactName: `${fileName}-\${version}-\${arch}.\${ext}` },
   linux: {
     target: ["AppImage", "deb"],
     category: "Development",
-    executableName: "codeden",
+    icon: "build/harden/icons",
+    executableName: slug,
     synopsis: "A local-first harness for coding agents",
     maintainer: "Leon van Zyl",
-    artifactName: "CodeDen-${version}-${arch}.${ext}",
+    artifactName: `${fileName}-\${version}-\${arch}.\${ext}`,
   },
-  deb: { artifactName: "codeden_${version}_${arch}.${ext}" },
+  deb: { artifactName: `${slug}_\${version}_\${arch}.\${ext}` },
 };

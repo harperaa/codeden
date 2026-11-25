@@ -1,9 +1,10 @@
+import { spend } from "./harden-scan";
 import { isWin, type PathContext } from "./paths";
 import { parseShell, type ShellDialect, type SimpleCommand } from "./shell";
 import type { Scope } from "./shell-builder";
 import type { EscapeMode } from "./shell-escapes";
 import { groupInputs } from "./stdin-scripts";
-import { resolveVariables } from "./variables";
+import { variableReadings } from "./variables";
 
 /**
  * The ways a command line may be read (§11.2), by how its shell reads escapes (`./shell-escapes`).
@@ -26,8 +27,10 @@ export function shellReadings(
   ctx: PathContext,
   scope?: Scope,
 ): SimpleCommand[][] {
-  return escapeModes(src, dialect, isWin(ctx)).map((mode) =>
-    resolveVariables(groupInputs(parseShell(src, dialect, mode)), new Map(scope)),
+  const modes = escapeModes(src, dialect, isWin(ctx));
+  spend(src.length * modes.length);
+  return modes.flatMap((mode) =>
+    variableReadings(() => groupInputs(parseShell(src, dialect, mode)), scope),
   );
 }
 
@@ -35,7 +38,9 @@ function escapeModes(src: string, dialect: ShellDialect, win: boolean): EscapeMo
   if (dialect === "powershell") return ["keep"];
   // `$'…'` is read with the backslashes.
   const escapes = src.includes("\\") || src.includes("$'");
-  if (dialect === "posix") return win && escapes ? ["posix", "keep"] : ["posix"];
+  // A `sh` without `$'…'` (dash) reads it as `$` and a plain quoted string: both readings count.
+  const ansiC = src.includes("$'");
+  if (dialect === "posix") return (win && escapes) || ansiC ? ["posix", "keep"] : ["posix"];
   const modes: EscapeMode[] = ["keep"];
   if (escapes) modes.push(win ? "careful" : "posix");
   if (win && src.includes("^")) modes.push("caret");

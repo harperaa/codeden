@@ -41,6 +41,10 @@ export const SNAPSHOT_ARCHIVED_SESSIONS_MAX = 100;
 export const Snapshot = z.object({
   seq: z.int().nonnegative(),
   serverVersion: z.string(),
+  /** The CodeHarden version (`YYYY.MMDD.HHMM`), for display. Absent from a server without it. */
+  hardenVersion: z.string().optional(),
+  /** The upstream CodeDen version the server is based on, for display. */
+  upstreamVersion: z.string().optional(),
   generatedAt: Timestamp,
   settings: Settings,
   projects: z.array(Project),
@@ -147,6 +151,10 @@ export const HealthResponse = z.object({
   ok: z.literal(true),
   name: z.literal("codeden"),
   version: z.string(),
+  /** The CodeHarden version (`YYYY.MMDD.HHMM`), for display. Absent from a server without it. */
+  hardenVersion: z.string().optional(),
+  /** The upstream CodeDen version the server is based on, for display. */
+  upstreamVersion: z.string().optional(),
   uptimeSec: z.number().nonnegative(),
 });
 export type HealthResponse = z.infer<typeof HealthResponse>;

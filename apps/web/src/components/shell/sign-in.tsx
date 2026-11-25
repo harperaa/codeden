@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { useClient } from "@/lib/api";
 import { SignInFailure } from "@/lib/api/network-api";
 import { Logo } from "./logo";
+import { Wordmark } from "./wordmark";
 
 /** Counts a wait down to zero, one second at a time. */
 function useCountdown(): [number, (seconds: number) => void] {
@@ -64,7 +65,9 @@ export function SignInScreen({ onSignedIn }: { onSignedIn?: () => void }) {
         aria-describedby="sign-in-help"
       >
         <Logo className="mx-auto mb-5 size-14" />
-        <h1 className="text-center text-xl font-semibold tracking-tight">Sign in to CodeDen</h1>
+        <h1 className="text-center text-xl font-semibold tracking-tight">
+          Sign in to <Wordmark />
+        </h1>
         <p id="sign-in-help" className="mt-2 text-center text-sm text-muted-foreground">
           Enter the network access password you set on the computer running CodeDen.
         </p>

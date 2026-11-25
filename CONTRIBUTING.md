@@ -9,8 +9,8 @@ Thanks for helping. CodeDen is plain TypeScript in a pnpm workspace, and most of
 You need **Node.js 24+**, **git**, and **pnpm 10** (`corepack enable` gives you the pinned version).
 
 ```sh
-git clone https://github.com/leonvanzyl/codeden.git
-cd codeden
+git clone https://github.com/harperaa/codeharden.git
+cd codeharden
 pnpm install
 pnpm dev
 ```
@@ -41,7 +41,7 @@ apps/
               orchestration, MCP tools, automations, factory, GitHub sync
   runner/     Runner process: provider sessions, event journal, terminals, browser, git
   web/        React 19 + Vite SPA (Tailwind v4, shadcn/ui, TanStack Router + Query, Zustand)
-  cli/        The published `codeden` package: CLI entry, bundles server + runner + web
+  cli/        The published `codeharden` package: CLI entry, bundles server + runner + web
 packages/
   contracts/  zod schemas for everything that crosses a boundary
   providers/  Provider adapters (Claude, Codex, Fake, Replay) and image engines
@@ -66,7 +66,7 @@ Package READMEs go deeper: [apps/server](apps/server/README.md), [packages/provi
 | `pnpm e2e` | Build the web app, then Playwright against a real server + runner with an isolated home and the Fake provider; not in CI |
 | `pnpm db:generate` | Generate a Drizzle migration after editing `apps/server/src/db/schema-*.ts`. If `main` gained a migration since you generated yours, delete your migration's folder after rebasing and generate it again, so the migrations stay one chain (`pnpm test` checks it) |
 
-Before you push: **`pnpm typecheck && pnpm lint && pnpm test`** must pass. CI runs the same in one Linux job, then builds, packs the npm tarball, installs it, runs `codeden doctor` and starts it to check the API and the web UI are served. Pull requests that only touch documentation skip it. The **CI result** check sums it up. The slow suites, the Playwright e2e suite and the desktop smoke test aren't part of CI; run them when you work in those areas. The release workflow builds and checks the desktop installers on Windows, macOS and Linux.
+Before you push: **`pnpm typecheck && pnpm lint`** must pass, and so must the tests of what you changed (`pnpm exec vitest run --project <name>`). CI runs typecheck and lint in one Linux job, runs all of `pnpm test` for pull requests into `harden` that are ready for review (not for drafts), then builds, packs the npm tarball, installs it, runs `codeharden doctor` and starts it to check the API and the web UI are served. Pull requests that only touch documentation skip it. The **CI result** check sums it up. The slow suites, the Playwright e2e suite and the desktop smoke test aren't part of CI; run them when you work in those areas. The release workflow builds and checks the desktop installers on Windows, macOS and Linux.
 
 ## Conventions
 
@@ -125,7 +125,7 @@ To re-record the Replay fixtures or regenerate the Codex protocol types, see [pa
 
 ## Releasing (maintainers)
 
-The published package is `apps/cli` (`codeden` on npm). Run **Actions › Release › Run workflow** on `main` and pick **patch**, **minor** or **major**. The workflow runs `scripts/release/bump-version.mjs`, which bumps the version in `apps/cli/package.json`, `apps/desktop/package.json` and `SOURCE_VERSION` in `packages/contracts/src/version.ts` (a test keeps them in sync), assembles the fragments in `changes/` into the new version's section of [CHANGELOG.md](CHANGELOG.md) and deletes them. Once the checks and the build pass, it commits `chore(release): X.Y.Z`, tags it, publishes with provenance and creates a GitHub Release. **dry-run** builds and packs without releasing. `pnpm changelog:preview` prints the changelog section the next release would add, without changing anything. To release by hand, run `node scripts/release/bump-version.mjs <patch|minor|major>`, commit what it changed and staged, then tag and push `vX.Y.Z`. Packing copies the root README into the package (`apps/cli/scripts/copy-readme.mjs`).
+A CodeHarden release is one commit on `harden`, `release: <version> (upstream <sha>)`, tagged `v<version>`, where the version is the release time in America/New_York (`YYYY.MMDD.HHMM`). `scripts/harden/release.sh` writes `VERSION`, the new entry in [CODEHARDEN-CHANGELOG.md](CODEHARDEN-CHANGELOG.md) and `state/upstream-base`, commits and tags (`--dry-run` shows it first, `--push` pushes both). The "Upstream sync merge" workflow runs it after merging a sync. It asks GitHub about what was merged since the last release, and refuses when upstream commits among it were merged before their 48-hour cooldown was over, unless the owner waived it ([docs/codeharden-sync-cooldown.md](docs/codeharden-sync-cooldown.md)). Publishing to npm (`codeharden`) is done by hand by the owner with `scripts/harden/publish.sh`; see [docs/codeharden-npm-release.md](docs/codeharden-npm-release.md). Upstream's Release workflow is disabled here, and the app's own version stays upstream's.
 
 ## Reporting security issues
 

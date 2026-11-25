@@ -95,8 +95,8 @@ export function SessionPage({
         forkedFrom ? (
           <ForkedEmpty origin={forkedFrom} />
         ) : (
-          <EmptyState icon={<MessageSquareDashed />} title="No messages yet" className="flex-1">
-            Describe the task. The agent works in its own worktree and branch.
+          <EmptyState icon={<MessageSquareDashed />} title="Hi" className="flex-1">
+            No messages yet. Describe the task. The agent works in its own worktree and branch.
           </EmptyState>
         )
       }

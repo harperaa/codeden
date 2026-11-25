@@ -60,7 +60,7 @@ apps/
   server/     Hono server, database, orchestration, MCP tools, automations, factory, GitHub sync
   runner/     Runner process: adapter host, terminals, browser, git, MCP proxy, journal
   web/        React SPA
-  cli/        The published `codeden` package (bundles server, runner and the built web app)
+  cli/        The published `codeharden` package (bundles server, runner and the built web app)
   desktop/    The desktop app (Electron): main process, preload bridge, server host, packaging
 packages/
   contracts/  zod schemas for everything that crosses a boundary

@@ -89,7 +89,7 @@ const spec: SandboxSpec = {
   recordId: "3f2a1b4c-9d8e7f",
   sessionId: "3f2a1b4c-0000-4000-8000-000000000001",
   projectId: "p-1",
-  image: "codeden-runner:0.7.2",
+  image: "codeharden-runner:0.7.2",
   cpus: 2,
   memoryMb: 4096,
   fake: true,
@@ -141,7 +141,7 @@ describe("the Docker backend", () => {
     let labels = "null";
     answer = (args) => (args[0] === "image" ? { stdout: labels } : {});
     const docker = backend(source);
-    expect(await docker.prepare()).toEqual({ image: "codeden-runner:0.7.2" });
+    expect(await docker.prepare()).toEqual({ image: "codeharden-runner:0.7.2" });
     const build = calls.find((c) => c.args[0] === "build");
     expect(build?.context).toEqual([
       "Dockerfile",
@@ -152,11 +152,11 @@ describe("the Docker backend", () => {
     ]);
     // The context is a temp folder removed afterwards.
     expect(existsSync(build?.args.at(-1) as string)).toBe(false);
-    const label = build?.args.find((a) => a.startsWith("codeden.build=")) ?? "";
-    expect(label).toMatch(/^codeden\.build=[a-f0-9]{16}$/);
+    const label = build?.args.find((a) => a.startsWith("codeharden.build=")) ?? "";
+    expect(label).toMatch(/^codeharden\.build=[a-f0-9]{16}$/);
 
     // Same bundle: no build. A changed bundle: built again.
-    labels = JSON.stringify({ "codeden.build": label.split("=")[1] });
+    labels = JSON.stringify({ "codeharden.build": label.split("=")[1] });
     calls = [];
     await docker.prepare();
     expect(calls.map((c) => c.args[0])).toEqual(["image"]);
@@ -179,7 +179,7 @@ describe("the Docker backend", () => {
     for (const outcome of both) {
       expect(outcome.status).toBe("rejected");
       expect(String((outcome as PromiseRejectedResult).reason)).toMatch(
-        /Building codeden-runner:0\.7\.2 failed: .*network down/,
+        /Building codeharden-runner:0\.7\.2 failed: .*network down/,
       );
     }
     await expect(backend(null).prepare()).rejects.toThrow(/build the CLI first \(pnpm build\)/);
@@ -189,8 +189,8 @@ describe("the Docker backend", () => {
     const ref = await backend().provision(spec);
     expect(ref).toEqual({
       backend: "docker",
-      container: "codeden-3f2a1b4c-9d8e7f",
-      volume: "codeden-3f2a1b4c-9d8e7f-data",
+      container: "codeharden-3f2a1b4c-9d8e7f",
+      volume: "codeharden-3f2a1b4c-9d8e7f-data",
     });
     expect(calls.map((c) => c.args.slice(0, 2).join(" "))).toEqual([
       "volume create",
@@ -224,36 +224,40 @@ describe("the Docker backend", () => {
   it("removes a container that is already gone, then its volume; reads states and lists", async () => {
     answer = (args) =>
       args[0] === "rm"
-        ? { code: 1, stderr: "Error response from daemon: No such container: codeden-x" }
+        ? { code: 1, stderr: "Error response from daemon: No such container: codeharden-x" }
         : args[0] === "container"
-          ? args.at(-1) === "codeden-gone"
-            ? { code: 1, stderr: "Error: No such object: codeden-gone" }
+          ? args.at(-1) === "codeharden-gone"
+            ? { code: 1, stderr: "Error: No such object: codeharden-gone" }
             : { stdout: '"exited"\n' }
           : args[0] === "ps"
             ? {
-                stdout: `${JSON.stringify({ Names: "codeden-a", State: "running", Labels: "codeden.session=s1" })}\n`,
+                stdout: `${JSON.stringify({ Names: "codeharden-a", State: "running", Labels: "codeharden.session=s1" })}\n`,
               }
             : {};
     const docker = backend();
-    await docker.remove({ backend: "docker", container: "codeden-x", volume: "codeden-x-data" });
+    await docker.remove({
+      backend: "docker",
+      container: "codeharden-x",
+      volume: "codeharden-x-data",
+    });
     expect(calls.map((c) => c.args.join(" "))).toEqual([
-      "rm --force codeden-x",
-      "volume rm --force codeden-x-data",
+      "rm --force codeharden-x",
+      "volume rm --force codeharden-x-data",
     ]);
-    expect(await docker.state({ backend: "docker", container: "codeden-a", volume: "v" })).toBe(
+    expect(await docker.state({ backend: "docker", container: "codeharden-a", volume: "v" })).toBe(
       "exited",
     );
     expect(
-      await docker.state({ backend: "docker", container: "codeden-gone", volume: "v" }),
+      await docker.state({ backend: "docker", container: "codeharden-gone", volume: "v" }),
     ).toBeNull();
     expect((await docker.list()).map((s) => [s.container, s.sessionId, s.state])).toEqual([
-      ["codeden-a", "s1", "running"],
+      ["codeharden-a", "s1", "running"],
     ]);
-    expect(calls.at(-1)?.args).toContain(`label=codeden.install=${installId(base)}`);
+    expect(calls.at(-1)?.args).toContain(`label=codeharden.install=${installId(base)}`);
   });
 
   it("opens the link as docker exec -i without starting it", () => {
-    const link = backend().openLink({ backend: "docker", container: "codeden-a", volume: "v" });
+    const link = backend().openLink({ backend: "docker", container: "codeharden-a", volume: "v" });
     expect(link.kind).toBe("exec");
     expect(calls).toEqual([]);
   });

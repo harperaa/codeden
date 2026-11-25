@@ -1,9 +1,20 @@
 import { parseArgs } from "node:util";
-import { CODEDEN_VERSION } from "@codeden/contracts";
+import {
+  formatHardenVersion,
+  HARDEN_COMMAND,
+  HARDEN_DEFAULT_PORT,
+  HARDEN_HOME_DISPLAY,
+} from "@codeden/contracts";
 
-export const DEFAULT_PORT = 4317;
+export const DEFAULT_PORT = HARDEN_DEFAULT_PORT;
 
-export const HELP = `codeden ${CODEDEN_VERSION}: a local-first harness for coding agents
+/** The help text below, with its commands named after the channel's command (`HARDEN_COMMAND`). */
+const named = (help: string) =>
+  help
+    .replaceAll("\n  codeden", `\n  ${HARDEN_COMMAND}`)
+    .replaceAll(`\n${" ".repeat(25)}`, `\n${" ".repeat(18 + HARDEN_COMMAND.length)}`);
+
+export const HELP = named(`${formatHardenVersion()}: a local-first harness for coding agents
 
 Usage:
   codeden [options]      Start CodeDen and open it in the browser
@@ -20,11 +31,11 @@ Usage:
 
 Options:
   --port <n>     Port to listen on (default ${DEFAULT_PORT})
-  --home <dir>   Data directory (default ~/.codeden, or CODEDEN_HOME)
+  --home <dir>   Data directory (default ${HARDEN_HOME_DISPLAY}, or CODEDEN_HOME)
   --no-open      Do not open the browser
   -v, --version  Print the version
   -h, --help     Show this help
-`;
+`);
 
 /** The command line; throws on an unknown option. */
 export function parseCli(args: string[]) {

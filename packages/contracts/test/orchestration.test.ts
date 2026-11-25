@@ -337,13 +337,13 @@ describe("session archive and worktree cleanup (§9)", () => {
     expect(() => WorktreeCleanupOutcome.parse({ status: "gone", message: null })).toThrow();
   });
 
-  it("switches a role's provider at a usage limit by default, and round-trips its notice", () => {
-    expect(Settings.parse({}).providers.autoSwitchOnLimit).toBe(true);
+  it("leaves a role's provider at a usage limit unless switched on, and round-trips its notice", () => {
+    expect(Settings.parse({}).providers.autoSwitchOnLimit).toBe(false);
     const off = Settings.parse({ providers: { autoSwitchOnLimit: false } });
     expect(Settings.parse(JSON.parse(JSON.stringify(off))).providers.autoSwitchOnLimit).toBe(false);
     // A settings file from before the switch existed keeps its role defaults.
     const older = Settings.parse({ providers: { pm: { provider: "codex" } } });
-    expect(older.providers).toMatchObject({ pm: { provider: "codex" }, autoSwitchOnLimit: true });
+    expect(older.providers).toMatchObject({ pm: { provider: "codex" }, autoSwitchOnLimit: false });
     const moved = { reason: "usage_limit", from: "claude", to: "codex", retryAt: ts };
     expect(ProviderSwitchData.parse(JSON.parse(JSON.stringify(moved)))).toEqual(moved);
     const stuck = { reason: "no_fallback", from: "claude", to: null, retryAt: null };

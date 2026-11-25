@@ -53,6 +53,8 @@ export interface RoleEnv {
   set(settings: SettingsInput): Promise<void>;
   /** Change the settings file only, as a version without this feature did. */
   setQuietly(settings: SettingsInput): void;
+  /** The settings of a new install, as the product ships them (the provider switch off). */
+  asShipped(): void;
   /** End the session's turn with `status`. */
   settle(id: string, status?: Session["status"]): void;
   /** The session's queue: sender and text, next first. */
@@ -84,6 +86,14 @@ export function deferred(): { promise: Promise<void>; resolve: () => void } {
 }
 
 /**
+ * Settings as these tests were written: the provider switch at a usage limit on, upstream's
+ * default. CodeHarden ships it off (`HARDEN_AUTO_SWITCH_ON_LIMIT_DEFAULT`); a test that names
+ * a value keeps it.
+ */
+const withSwitchOn = (next: SettingsInput) =>
+  Settings.parse({ ...next, providers: { autoSwitchOnLimit: true, ...next.providers } });
+
+/**
  * Role sessions over a real database, queue and SessionService, with a scripted runner that
  * has `claude` and `codex` (`gemini` stands for a provider the runner doesn't have). Starts
  * are accepted and never finish by themselves: a new session stays `starting` until `settle`.
@@ -97,7 +107,7 @@ export function withRoles(run: (env: RoleEnv) => Promise<void>) {
       const repo = new SessionRepo(database.db, store);
       const inbox = new InboxService(database.db, store, () => async () => {});
       const outbox = new Outbox(database.db, store);
-      let settings = Settings.parse({});
+      let settings = withSwitchOn({});
       let connected = true;
       let loaded = [info("claude"), info("codex")];
       let ready: string[] | null = null;
@@ -205,11 +215,14 @@ export function withRoles(run: (env: RoleEnv) => Promise<void>) {
         },
         set: (next) => {
           const before = settings.providers;
-          settings = Settings.parse(next);
+          settings = withSwitchOn(next);
           return roles.applyProviderSettings(before);
         },
         setQuietly: (next) => {
-          settings = Settings.parse(next);
+          settings = withSwitchOn(next);
+        },
+        asShipped: () => {
+          settings = Settings.parse({});
         },
         settle: (id, status = "idle") => {
           repo.update(id, (s) => ({ ...s, status }));

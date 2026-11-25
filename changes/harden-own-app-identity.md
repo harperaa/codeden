@@ -1,0 +1,8 @@
+---
+section: changed
+---
+
+- **CodeHarden is its own app, with its own home.** It now installs and runs next to CodeDen without the two touching each other. The data folder is `~/.codeharden` (it was CodeDen's `~/.codeden`), the default port is 4417 (CodeDen's is 4317), the desktop app is `CodeHarden` with the app id `com.codeharden.app` and opens `codeharden://` links, API keys and the GitHub token are kept in the keychain under `codeharden`, and repositories are cloned into `~/codeharden-projects` unless you pick a folder. Installers are named `CodeHarden-<version>-<arch>.<ext>` and `CodeHarden-Setup-<version>.exe`, and the packaged desktop app carries the CodeHarden version, so it updates from CodeHarden's releases.
+  - **Nothing is moved.** A first start in `~/.codeharden` is empty, and `~/.codeden` is left exactly as it is. To keep using your old data, start with `--home ~/.codeden` (for example `npx codeharden --home ~/.codeden`) or set `CODEDEN_HOME`; the terminal and `codeharden doctor` say so once, while the new home doesn't exist yet. Keys saved in the keychain before are under CodeDen's name: enter them again in Settings. Projects already on disk stay where they are; add them again with **Add project**.
+  - **If you installed with `npm i -g codeharden`,** install the new version the same way (`npm i -g codeharden@latest`) rather than with `codeharden update`: the earlier version's updater installs into the old home.
+  - Unchanged, so projects and sessions stay compatible with CodeDen: the `.codeden/` folder in a repository, `codeden/…` branch names, the `CODEDEN_*` environment variables and the `codeden` MCP server.

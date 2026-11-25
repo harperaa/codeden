@@ -38,7 +38,7 @@ export interface ProjectServiceDeps {
   db: Db;
   store: EventStore;
   exec: Exec;
-  /** Where clones go when the user doesn't pick a folder (`~/codeden-projects`). */
+  /** Where clones go when the user doesn't pick a folder (`~/codeharden-projects`). */
   projectsDir: string;
 }
 

@@ -51,6 +51,8 @@ const capabilities: ProviderCapabilities = {
   hookRuns: true,
   // `--append-system-prompt` is sent on every start and resume and survives compaction.
   systemPrompt: true,
+  // `.claude/commands/*.md` in the project are its `/` commands.
+  projectCommands: true,
 };
 
 const EFFORTS: ReasoningEffort[] = ["low", "medium", "high", "xhigh", "max"];

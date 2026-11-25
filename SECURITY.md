@@ -6,8 +6,8 @@ CodeDen runs coding agents on your machine with access to your repositories and 
 
 **Please don't open a public issue.** Report it privately instead:
 
-1. Go to the repository's **Security** tab on GitHub and choose **Report a vulnerability** (GitHub private vulnerability reporting): <https://github.com/leonvanzyl/codeden/security/advisories/new>.
-2. Include what you found, the CodeDen version (`codeden --version`), your OS, and steps to reproduce. A proof of concept helps, but please keep it minimal.
+1. Go to the repository's **Security** tab on GitHub and choose **Report a vulnerability** (GitHub private vulnerability reporting): <https://github.com/harperaa/codeharden/security/advisories/new>.
+2. Include what you found, the CodeDen version (`codeharden --version`), your OS, and steps to reproduce. A proof of concept helps, but please keep it minimal.
 
 You should get an acknowledgement within a few days. Once the issue is confirmed, a fix is prepared privately, released, and the advisory is published with credit to you unless you'd rather stay anonymous.
 
@@ -25,4 +25,4 @@ Out of scope: what an agent does with the permissions you gave it (for example u
 
 ## Supported versions
 
-Security fixes go into the latest release. Update with `npx codeden@latest`.
+Security fixes go into the latest release. Update with `npx codeharden@latest`.

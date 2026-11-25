@@ -1,5 +1,6 @@
 import { createInterface } from "node:readline";
 import {
+  HARDEN_COMMAND,
   type NetworkAddress,
   NetworkStatus,
   PASSWORD_RULE_TEXT,
@@ -17,9 +18,8 @@ import {
   RemoteAccessStore,
   TrustedOriginError,
 } from "@codeden/server";
+import { DEFAULT_PORT } from "./args";
 import { findRunningServer } from "./running";
-
-const DEFAULT_PORT = 4317;
 
 /**
  * The home's network access file, used while CodeDen is not running. A damaged file is kept
@@ -129,12 +129,14 @@ export async function passwordCommand(home: string, opts: { generate: boolean })
   return 0;
 }
 
-const NETWORK_USAGE = `Usage: codeden network [on [--loopback-only] | off]
-       codeden network origin add <https-url> | remove <https-url> | list`;
+const NETWORK_USAGE = `Usage: ${HARDEN_COMMAND} network [on [--loopback-only] | off]
+       ${HARDEN_COMMAND} network origin add <https-url> | remove <https-url> | list`;
 
 function printOrigins(origins: readonly string[]): void {
   if (origins.length === 0) {
-    console.log("No trusted origins. Add one with: codeden network origin add https://<host>");
+    console.log(
+      `No trusted origins. Add one with: ${HARDEN_COMMAND} network origin add https://<host>`,
+    );
     return;
   }
   console.log("Trusted origins (a reverse proxy on this computer, e.g. Tailscale Serve):");
@@ -255,7 +257,7 @@ export async function networkCommand(
   if (viaServer) {
     if (!viaServer.ok) {
       console.error(errorMessage(viaServer.body));
-      if (viaServer.status === 400) console.error("Run: codeden password");
+      if (viaServer.status === 400) console.error(`Run: ${HARDEN_COMMAND} password`);
       return 1;
     }
     printStatus(NetworkStatus.parse(viaServer.body));
@@ -277,13 +279,13 @@ export async function networkCommand(
     store.setEnabled(action === "on");
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
-    console.error("Run: codeden password");
+    console.error(`Run: ${HARDEN_COMMAND} password`);
     return 1;
   }
   if (action === "on" && loopbackOnly) {
     console.log("Network access is on, loopback only. When CodeDen starts it listens on");
     console.log(
-      "127.0.0.1 and answers only through a trusted origin (codeden network origin add).",
+      `127.0.0.1 and answers only through a trusted origin (${HARDEN_COMMAND} network origin add).`,
     );
   } else if (action === "on") {
     console.log("Network access is on. When CodeDen starts it will answer on:");

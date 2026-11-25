@@ -4,8 +4,11 @@
  * unread count stays in both. When flashing stops the usual title comes back.
  */
 
-export const APP_TITLE = "CodeDen";
-export const WAITING_TITLE = "⏳ Waiting on you · CodeDen";
+import { HARDEN_PRODUCT_NAME } from "@codeden/contracts";
+
+/** The page's name: the fork's product name, as in `index.html` (`scripts/harden/web-identity.mjs`). */
+export const APP_TITLE = HARDEN_PRODUCT_NAME;
+export const WAITING_TITLE = `⏳ Waiting on you · ${APP_TITLE}`;
 export const TITLE_FLASH_MS = 1500;
 
 /** "(3) CodeDen", or the bare title with nothing open. */

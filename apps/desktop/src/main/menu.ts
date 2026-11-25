@@ -1,3 +1,4 @@
+import { HARDEN_PRODUCT_NAME } from "@codeden/contracts";
 import type { MenuItemConstructorOptions } from "electron";
 import type { ZoomCommand } from "./zoom";
 
@@ -58,14 +59,14 @@ export function appMenuTemplate(
     click: actions.checkForUpdates,
   };
   const quit: MenuItemConstructorOptions = {
-    label: mac ? "Quit CodeDen" : "Quit",
+    label: mac ? `Quit ${HARDEN_PRODUCT_NAME}` : "Quit",
     accelerator: mac ? "Cmd+Q" : "Ctrl+Q",
     click: actions.quit,
   };
   const template: MenuItemConstructorOptions[] = [];
   if (mac) {
     template.push({
-      label: "CodeDen",
+      label: HARDEN_PRODUCT_NAME,
       submenu: [
         { role: "about" },
         updates,
@@ -107,7 +108,7 @@ export function appMenuTemplate(
   template.push({
     role: "help",
     submenu: [
-      { label: "CodeDen Documentation", click: actions.openDocs },
+      { label: `${HARDEN_PRODUCT_NAME} Documentation`, click: actions.openDocs },
       { label: "Show Logs", click: actions.openLogs },
       { label: "Export Diagnostics", click: actions.exportDiagnostics },
       { label: "Retry Loading CodeDen", click: actions.retryLoading },
