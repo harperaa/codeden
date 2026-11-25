@@ -111,7 +111,11 @@ export function mockDevPreviewApi(
     suggestion:
       configs.has(projectId) || world.hasDevScript?.(projectId) === false
         ? null
-        : { command: "pnpm dev", reason: "package.json has a dev script" },
+        : {
+            command: "pnpm dev",
+            prepareCommand: "pnpm install --frozen-lockfile",
+            reason: "package.json has a dev script",
+          },
     recommended: null,
     baseBranch: "main",
     notice: null,

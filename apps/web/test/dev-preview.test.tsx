@@ -1,4 +1,5 @@
 import {
+  DEV_PREVIEW_NO_PREPARE_HINT,
   type DevPreviewProject,
   type DevPreviewState,
   devPreviewBaseKey,
@@ -127,6 +128,38 @@ describe("the preview bar on a session", () => {
     await waitFor(() => expect(startSession).toHaveBeenCalled());
   });
 
+  it("says that a prepare command is missing, with the way to the settings, when the server hints at it", async () => {
+    const failure = "The dev command exited with code 127 before anything was listening.";
+    const failed = (message: string) =>
+      sessionState({
+        status: "failed",
+        enabled: true,
+        message,
+        logTail: ["$ npm run dev", "sh: next: command not found"],
+      });
+    const hinted = renderWithClient(
+      <DevPreviewBar session={agent} />,
+      clientWith({ session: async () => failed(`${failure} ${DEV_PREVIEW_NO_PREPARE_HINT}`) }),
+    );
+    // The failure itself, then the hint in a place of its own and the link.
+    expect((await screen.findByTestId("dev-preview-message")).textContent).toBe(failure);
+    expect(screen.getByTestId("dev-preview-needs-prepare").textContent).toBe(
+      DEV_PREVIEW_NO_PREPARE_HINT,
+    );
+    expect(screen.getByTestId("dev-preview-fix-prepare").getAttribute("href")).toBe(
+      `/projects/${PROJECT}?tab=settings#dev-preview`,
+    );
+    hinted.unmount();
+    // The same failure in a project with a prepare command comes without the hint.
+    renderWithClient(
+      <DevPreviewBar session={agent} />,
+      clientWith({ session: async () => failed(failure) }),
+    );
+    expect((await screen.findByTestId("dev-preview-message")).textContent).toBe(failure);
+    expect(screen.queryByTestId("dev-preview-needs-prepare")).toBeNull();
+    expect(screen.queryByTestId("dev-preview-fix-prepare")).toBeNull();
+  });
+
   it("is disabled with the reason for a session that has no worktree", async () => {
     const reason = "This session works in the project folder, not in a worktree of its own.";
     renderWithClient(
@@ -212,7 +245,11 @@ describe("the project's dev preview settings", () => {
   const view = (over: Partial<DevPreviewProject> = {}): DevPreviewProject => ({
     projectId: PROJECT,
     config: null,
-    suggestion: { command: "pnpm dev", reason: "package.json has a dev script" },
+    suggestion: {
+      command: "pnpm dev",
+      prepareCommand: "pnpm install --frozen-lockfile",
+      reason: "package.json has a dev script",
+    },
     recommended: null,
     baseBranch: "harden",
     notice: null,
@@ -220,21 +257,23 @@ describe("the project's dev preview settings", () => {
     ...over,
   });
 
-  it("a suggestion only fills the field: nothing is stored until the person confirms", async () => {
+  it("a suggestion only fills the fields: nothing is stored until the person confirms", async () => {
     const confirmProject = vi.fn(async () => view());
     renderWithClient(
       <DevPreviewProjectSettings project={project} />,
       clientWith({ project: async () => view(), confirmProject }),
     );
     const command = (await screen.findByTestId("dev-preview-command")) as HTMLInputElement;
+    const prepare = screen.getByTestId("dev-preview-prepare") as HTMLInputElement;
     expect(command.value).toBe("");
+    // One offer for both, at the dev command; not a second one at the prepare command.
+    expect(screen.queryByTestId("dev-preview-prepare-suggestion")).toBeNull();
     fireEvent.click(screen.getByText("Fill it in"));
     expect(command.value).toBe("pnpm dev");
+    expect(prepare.value).toBe("pnpm install --frozen-lockfile");
+    expect(screen.queryByText("Fill it in")).toBeNull();
     expect(confirmProject).not.toHaveBeenCalled();
 
-    fireEvent.change(screen.getByTestId("dev-preview-prepare"), {
-      target: { value: "pnpm install --frozen-lockfile" },
-    });
     fireEvent.click(screen.getByTestId("dev-preview-save"));
     // The dialog shows exactly what would run; still nothing stored.
     const dialog = await screen.findByTestId("dev-preview-confirm");
@@ -256,6 +295,56 @@ describe("the project's dev preview settings", () => {
         urlPattern: null,
         // Nobody switched "On the PM thread" on, so no preview starts by itself.
         pmEnabled: false,
+      }),
+    );
+  });
+
+  it("offers the prepare command for stored settings that have none, and stores it only on confirmation", async () => {
+    const config = {
+      command: "npm run dev",
+      prepareCommand: null,
+      portVars: ["PORT"],
+      urlFrom: "port" as const,
+      urlPattern: null,
+      pmEnabled: true,
+      confirmedAt: "2026-11-23T10:00:00.000Z",
+      baseBranch: "harden",
+    };
+    const suggestion = {
+      command: "npm run dev",
+      prepareCommand: "npm ci",
+      reason: "package.json has a dev script",
+    };
+    const confirmProject = vi.fn(async () => view({ config, suggestion: null }));
+    renderWithClient(
+      <DevPreviewProjectSettings project={project} />,
+      clientWith({ project: async () => view({ config, suggestion }), confirmProject }),
+    );
+    const offer = await screen.findByTestId("dev-preview-prepare-suggestion");
+    expect(offer.textContent).toContain("npm ci");
+    // The dev command is stored already: nothing is offered for it.
+    expect(screen.queryByTestId("dev-preview-suggestion")).toBeNull();
+    const prepare = screen.getByTestId("dev-preview-prepare") as HTMLInputElement;
+    expect(prepare.value).toBe("");
+    fireEvent.click(screen.getByText("Fill it in"));
+    expect(prepare.value).toBe("npm ci");
+    expect(screen.queryByTestId("dev-preview-prepare-suggestion")).toBeNull();
+    expect(confirmProject).not.toHaveBeenCalled();
+
+    const save = screen.getByTestId("dev-preview-save");
+    expect(save.textContent).toBe("Save changes…");
+    fireEvent.click(save);
+    expect((await screen.findByTestId("dev-preview-confirm")).textContent).toContain("npm ci");
+    expect(confirmProject).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId("dev-preview-confirm-run"));
+    await waitFor(() =>
+      expect(confirmProject).toHaveBeenCalledWith(PROJECT, {
+        command: "npm run dev",
+        prepareCommand: "npm ci",
+        portVars: ["PORT"],
+        urlFrom: "port",
+        urlPattern: null,
+        pmEnabled: true,
       }),
     );
   });

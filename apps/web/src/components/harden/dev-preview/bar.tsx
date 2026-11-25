@@ -1,4 +1,5 @@
 import {
+  DEV_PREVIEW_NO_PREPARE_HINT,
   type DevPreviewState,
   type DevPreviewStatus,
   HARDEN_DEV_PREVIEW_PORT_ERROR,
@@ -76,6 +77,15 @@ function DevPreviewStrip(target: PreviewTarget) {
     state.status === "failed" &&
     !state.remote &&
     state.logTail.some((line) => line.startsWith(HARDEN_DEV_PREVIEW_PORT_ERROR));
+  // The dev command's programs weren't there and the project has no prepare command: the
+  // server ends the message with that hint. Here it gets a place of its own, so it isn't cut
+  // off, and the link to where a prepare command is added.
+  const needsPrepare =
+    state.status === "failed" && (state.message?.endsWith(DEV_PREVIEW_NO_PREPARE_HINT) ?? false);
+  const message =
+    needsPrepare && state.message
+      ? state.message.slice(0, -DEV_PREVIEW_NO_PREPARE_HINT.length).trim()
+      : state.message;
   const busy = turn.isPending || restart.isPending;
   const blocked = state.enabled ? null : (state.unavailable ?? (state.remote ? REMOTE : null));
   const ended = state.status === "stopped" || state.status === "failed";
@@ -106,17 +116,31 @@ function DevPreviewStrip(target: PreviewTarget) {
         </Tooltip>
         {(state.enabled || ended) && <StatusChip state={state} />}
         {state.url && <PreviewLink url={state.url} remote={state.remote} />}
-        {state.message && (
+        {message && (
           <span
             className={cn(
               "min-w-0 truncate",
               state.status === "failed" ? "text-status-failed" : "text-muted-foreground",
             )}
-            title={state.message}
+            title={message}
             data-testid="dev-preview-message"
           >
-            {state.message}
+            {message}
           </span>
+        )}
+        {needsPrepare && (
+          <>
+            <span className="text-muted-foreground" data-testid="dev-preview-needs-prepare">
+              {DEV_PREVIEW_NO_PREPARE_HINT}
+            </span>
+            <a
+              href={settingsHref(target.projectId)}
+              className="shrink-0 underline underline-offset-2 hover:text-foreground"
+              data-testid="dev-preview-fix-prepare"
+            >
+              Open the Dev preview settings
+            </a>
+          </>
         )}
         {portsMissing && (
           <a

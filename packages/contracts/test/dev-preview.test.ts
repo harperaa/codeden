@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEV_PREVIEW_NO_PREPARE_HINT,
   DEV_PREVIEW_RESERVED_PORTS,
   DevPreviewConfig,
   DevPreviewLimits,
@@ -9,6 +10,7 @@ import {
   DevPreviewSettings,
   DevPreviewState,
   DevPreviewStopAll,
+  DevPreviewSuggestion,
   defaultDevPreviewLimits,
   devPreviewBaseKey,
   devPreviewPortCount,
@@ -157,13 +159,25 @@ describe("dev preview contracts", () => {
     const project = {
       projectId: "p1",
       config: null,
-      suggestion: { command: "pnpm dev", reason: "package.json has a dev script" },
+      suggestion: {
+        command: "pnpm dev",
+        prepareCommand: "pnpm install --frozen-lockfile",
+        reason: "package.json has a dev script",
+      },
       recommended: hardenDevPreviewRecommended(),
       baseBranch: "harden",
       notice: "The checkout was kept.",
       remote: false,
     };
     expect(roundTrip(DevPreviewProject, project)).toEqual(project);
+    // A suggestion without a prepare command says so with null.
+    const bare = { command: "npm run dev", reason: "package.json has a dev script" };
+    expect(roundTrip(DevPreviewSuggestion, bare)).toEqual({ ...bare, prepareCommand: null });
+    const hinted = {
+      ...session,
+      message: `The dev command exited with code 127 before anything was listening. ${DEV_PREVIEW_NO_PREPARE_HINT}`,
+    };
+    expect(roundTrip(DevPreviewState, hinted)).toEqual(hinted);
     expect(roundTrip(DevPreviewLog, { key: "session:s1", lines: ["a", "b"] }).lines).toEqual([
       "a",
       "b",
