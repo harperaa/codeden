@@ -29,8 +29,11 @@ import {
 import { InboxService } from "../src/services/inbox-service";
 import { ProjectService } from "../src/services/projects/project-service";
 import { SettingsStore } from "../src/settings-store";
+import { waitUntil } from "./support/harness";
 import { removeTree } from "./support/remove-tree";
 
+/** Room for a busy machine, under this suite's 40 s test timeout. */
+const WAIT_MS = 30_000;
 const REPO_ROOT = resolve(import.meta.dirname, "../../..");
 const [FIRST, SECOND] = HARDEN_SYNC_AUTOMATIONS.map((a) => a.id) as [string, string];
 
@@ -276,6 +279,52 @@ describe("offering the upstream-sync reviews to a project", () => {
     expect(of("fork").map((a) => a.id)).toEqual(shippedIds("fork"));
     expect(of("fork").every((a) => !a.enabled)).toBe(true);
     expect(of("shop")).toEqual([]);
+  });
+
+  // The next two go through the started service's own event hooks, never through `offer()`.
+  it("gives them to a project added while the server runs, through its event", async () => {
+    automations.start();
+    addProject("shop", join(dir, "shop"));
+    addProject("fork", checkout("fork"));
+    await waitUntil(
+      () => of("fork").filter((a) => shippedIds("fork").includes(a.id)).length === 2,
+      WAIT_MS,
+    );
+    for (const id of shippedIds("fork")) {
+      expect(automations.definitions.get(id)).toMatchObject({ enabled: false, source: "database" });
+    }
+    // The starter set arrived by the same event, so the events for "shop" were handled too.
+    await waitUntil(() => of("shop").length > 0, WAIT_MS);
+    expect(of("shop").map((a) => a.workKey)).not.toEqual(
+      expect.arrayContaining(HARDEN_SYNC_AUTOMATIONS.map((a) => a.workKey)),
+    );
+    expect(of("shop").some((a) => a.id.endsWith(FIRST) || a.id.endsWith(SECOND))).toBe(false);
+    expect(automations.pairs()).toEqual([]);
+  });
+
+  it("puts the shipped first review in place of a hand-made one when that is deleted, through its event", async () => {
+    addProject("fork", checkout("fork"));
+    const byHand = automations.definitions.create({
+      projectId: "fork",
+      name: "Daily upstream sync: first review",
+      trigger: { type: "cron", expression: "0 9 * * *" },
+      action: { type: "start_session", prompt: "The hand-made first review." },
+      workKey: HARDEN_SYNC_AUTOMATIONS[0]?.workKey,
+      enabled: true,
+    });
+    automations.start();
+    // At start only the second review is free: the hand-made one holds the first's work key.
+    expect(automations.definitions.find(`starter:fork:${FIRST}`)).toBeUndefined();
+    expect(automations.definitions.get(`starter:fork:${SECOND}`).enabled).toBe(false);
+
+    automations.definitions.remove(byHand.id);
+    const first = await waitUntil(
+      () => automations.definitions.find(`starter:fork:${FIRST}`),
+      WAIT_MS,
+    );
+    expect(first).toMatchObject({ enabled: false, workKey: HARDEN_SYNC_AUTOMATIONS[0]?.workKey });
+    expect(first.approvedAutonomy).toBeUndefined();
+    expect(automations.definitions.find(byHand.id)).toBeUndefined();
   });
 
   it("gives nothing to a project that isn't one", () => {
