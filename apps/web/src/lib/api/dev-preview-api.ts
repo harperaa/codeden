@@ -122,10 +122,15 @@ export function mockDevPreviewApi(
   const view = (projectId: string): DevPreviewProject => ({
     projectId,
     config: configs.get(projectId) ?? null,
+    // As the server: still offered for stored settings that have no prepare command.
     suggestion:
-      configs.has(projectId) || world.hasDevScript?.(projectId) === false
+      configs.get(projectId)?.prepareCommand || world.hasDevScript?.(projectId) === false
         ? null
-        : { command: "pnpm dev", reason: "package.json has a dev script" },
+        : {
+            command: "pnpm dev",
+            prepareCommand: "pnpm install --frozen-lockfile",
+            reason: "package.json has a dev script",
+          },
     recommended: null,
     baseBranch: "main",
     notice: null,

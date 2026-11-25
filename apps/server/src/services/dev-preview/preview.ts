@@ -1,5 +1,6 @@
 import {
   DEV_PREVIEW_LOG_LINES,
+  DEV_PREVIEW_NO_PREPARE_HINT,
   DEV_PREVIEW_TAIL_LINES,
   type DevPreviewConfig,
   type DevPreviewStatus,
@@ -7,8 +8,9 @@ import {
   previewUrlInLine,
   stripTerminalCodes,
 } from "@codeden/contracts";
+import { endedAsNotInstalled } from "./failure-hint";
 import type { RunningRegistry } from "./leftovers";
-import type { PreparedStore } from "./lockfile";
+import { type PreparedStore, snapshotFolder } from "./lockfile";
 import { type PreviewExit, type PreviewProcess, previewEnv, type SpawnPreview } from "./process";
 
 /** What a preview needs from outside; all of it is replaced in tests. */
@@ -241,6 +243,8 @@ export class Preview {
       this.status = "preparing";
       this.spawnedAt = this.deps.now();
       this.note(`$ ${prepare}`);
+      // What the folder holds now: what is new when the command ends is what it installed.
+      const before = snapshotFolder(cwd);
       const proc = this.spawn(prepare);
       const exit = await proc.exited;
       // What the prepare command left running in its group ends with it.
@@ -253,7 +257,7 @@ export class Preview {
         this.message = `The prepare command ${exitText(exit)}.`;
         return;
       }
-      this.deps.prepared.record(cwd, prepare);
+      this.deps.prepared.record(cwd, prepare, before);
     }
     this.status = "starting";
     this.printed = null;
@@ -284,7 +288,16 @@ export class Preview {
     this.status = this.everRan ? "stopped" : "failed";
     this.message = this.everRan
       ? `The dev command ${exitText(exit)}.`
-      : `The dev command ${exitText(exit)} before anything was listening.`;
+      : `The dev command ${exitText(exit)} before anything was listening.${this.prepareHint(exit)}`;
+  }
+
+  /**
+   * What to add when the dev command never came up because its programs aren't there and the
+   * project has no prepare command. With one set, nothing: it ran, so the cause is another.
+   */
+  private prepareHint(exit: PreviewExit): string {
+    if (this.settings?.prepareCommand) return "";
+    return endedAsNotInstalled(exit, this.log()) ? ` ${DEV_PREVIEW_NO_PREPARE_HINT}` : "";
   }
 
   private note(line: string): void {

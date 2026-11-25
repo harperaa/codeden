@@ -62,7 +62,11 @@ export function devPreviewOffer(
   }
   if (view.recommended) return view.recommended;
   if (!view.suggestion) return null;
-  const settings = DevPreviewSettings.safeParse({ command: view.suggestion.command });
+  const settings = DevPreviewSettings.safeParse({
+    command: view.suggestion.command,
+    // The install command for the same lockfile; null when the folder has none.
+    prepareCommand: view.suggestion.prepareCommand,
+  });
   return settings.success ? { settings: settings.data, reason: view.suggestion.reason } : null;
 }
 

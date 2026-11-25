@@ -24,7 +24,7 @@ Turn on **Dev preview** at the top of a thread.
 
 For a Secure Foundation project the question also lists what stays for you to do before the preview works (copying `.env.local`, keeping Convex running): the same notes the settings show.
 
-The app can suggest settings for a checkout of [this repository](#this-repository-codeharden-itself), for a [Secure Foundation project](#secure-foundation-projects), and for a project with a `dev` script (the dev command only: `pnpm dev`, `yarn dev`, `bun run dev` or `npm run dev`, by the lockfile it finds; the dialog says when there is no prepare command, which a fresh worktree usually needs). The suggested text is the app's own, never the repository's, and the question is the same one the settings ask: it is asked once per project, and again whenever the commands change. Settings stored from a session's switch leave the PM thread's preview off; stored from the PM thread's switch, they switch it on.
+The app can suggest settings for a checkout of [this repository](#this-repository-codeharden-itself), for a [Secure Foundation project](#secure-foundation-projects), and for a project with a `dev` script: a dev command and the prepare command that goes with it, by the lockfile it finds ([the table below](#set-it-up)). A project with a `dev` script and no lockfile is offered the dev command alone, and the dialog then says that there is no prepare command, which a fresh worktree usually needs. The suggested text is the app's own, never the repository's, and the question is the same one the settings ask: it is asked once per project, and again whenever the commands change. Settings stored from a session's switch leave the PM thread's preview off; stored from the PM thread's switch, they switch it on.
 
 ## Set it up
 
@@ -38,7 +38,21 @@ Open the project, **Settings**, **Dev preview**. This is also where you change w
 | Link | **First port**: `http://localhost:<the first port>`. **From the output**: the first local URL the dev command prints, for dev servers that choose their own port. A pattern (a regular expression whose first group is the URL) narrows that down. An address on one of the app's own ports is never taken. |
 | On the PM thread | Whether a preview of the base branch runs for the PM thread. Off until you switch it on, here or with the switch on the PM thread; your choice is kept. A project that was set up while this was on by default keeps it on. |
 
-If the project has a `dev` script, the form offers a command to fill in (`pnpm dev`, `yarn dev`, `bun run dev` or `npm run dev`, by the lockfile it finds). That only fills the field. Two kinds of project open with the whole form filled in: a checkout of [this repository](#this-repository-codeharden-itself) and a [Secure Foundation project](#secure-foundation-projects).
+If the project has a `dev` script, the form offers commands to fill in, chosen by the lockfile it finds:
+
+| Lockfile | Dev command | Prepare command |
+|---|---|---|
+| `pnpm-lock.yaml` | `pnpm dev` | `pnpm install --frozen-lockfile` |
+| `yarn.lock` | `yarn dev` | `yarn install --frozen-lockfile` |
+| `bun.lock`, `bun.lockb` | `bun run dev` | `bun install --frozen-lockfile` |
+| `package-lock.json`, `npm-shrinkwrap.json` | `npm run dev` | `npm ci` |
+| None of these | `npm run dev` | None is offered |
+
+With more than one lockfile, the first in this order decides. These are fixed texts in the app: the repository decides only which row applies (that a `dev` script exists, and which lockfile is there), never what a command says. **Fill it in** only fills the fields, and what you typed in the prepare field stays. `yarn install --frozen-lockfile` is the one form every Yarn takes: Yarn 1 knows it, and later versions print a deprecation warning and treat it as their `--immutable`, which Yarn 1 doesn't know. If a later Yarn drops it, change the prepare command to `yarn install --immutable`.
+
+For **settings that are stored without a prepare command**, the prepare field offers the one from the table with its own **Fill it in**. It changes nothing by itself: **Save changes…** and **Save and allow** store it, like any other change.
+
+Two kinds of project open with the whole form filled in: a checkout of [this repository](#this-repository-codeharden-itself) and a [Secure Foundation project](#secure-foundation-projects).
 
 The button under the form says what it will do:
 
@@ -115,9 +129,9 @@ Why these values:
 | **Starting** | The dev command is running; nothing answers on its port yet. |
 | **Running** and a link | Something answers on the port. The link opens it. |
 | **Stopped** and a reason | It ran and ended: the dev command exited, the session was stopped or archived, or it was stopped to make room. **Restart** starts it again. |
-| **Failed** and a reason | It never came up. The last lines of its output are shown underneath. |
+| **Failed** and a reason | It never came up. The last lines of its output are shown underneath. When the dev command ended because a program of its own wasn't there (exit code 127, or a "command not found" line at the end of its output) and the project has no prepare command, the strip adds that the dependencies probably aren't installed in this checkout, with a link to the project's Dev preview settings. That is a hint: the app installs nothing and changes no settings by itself. |
 
-**Log** opens everything the prepare and dev commands printed since the last start.
+**Log** opens everything the prepare and dev commands printed since the last start. The lines under a failed or stopped preview are only the last twelve, so an install that ran before the dev command is usually not among them: open **Log** to see it.
 
 The link appears only once something is actually listening: the app tries the port instead of trusting that the command says it is ready. With **From the output** the address itself is the one the command printed, so it is as trustworthy as the project's dev script.
 
@@ -132,6 +146,7 @@ The PM thread's preview is off until you switch it on, with the switch at the to
 The base branch's preview runs from **a checkout of its own**, inside the app's home (`dev-preview/base/<project>`). It is never your project folder, and never a session's worktree.
 
 - About every 90 seconds, and when you press **Update now**, the app fetches the base branch from the project's remote (for a project without a remote, it reads the local branch) and **fast-forwards** the checkout to it. The dev server's own reload picks the new files up. When the remote can't be reached the strip says so, the preview keeps running on the last tip, and the app asks less often until it answers again.
+- It starts like a session's: the prepare command runs first in that checkout (**Preparing**, with its output in the log), then the dev command (**Starting**), then the link (**Running**). A prepare command that fails is reported with its exit code, and no dev command starts.
 - The dev command is restarted only when it must be: when a lockfile changed, so the prepare command ran again, or after it stopped.
 - **A project with automatic merges** (the factory's auto-merge setting) doesn't start this preview by itself: there the base branch moves without anyone reading the change, so the preview waits for **Restart** (on the PM thread, or in the project's Settings › Dev preview) once each time the app starts. Saving the settings counts as that start.
 - It follows **the branch you confirmed**. Saving the settings records the project's base branch at that moment, and the dialog names it. If the project's base branch is changed later (the orchestrator can change it, and so can project settings opened from another device), the preview stops and says so, and runs nothing from the new branch until you confirm the dev preview settings again on this computer (**Confirm again…** in the project's settings).
@@ -199,7 +214,7 @@ Read this before you set a project up: a dev preview runs the project's code on 
 ## Troubleshooting
 
 - **A preview says Failed and the log ends in "command not found".** The command runs in your login shell, with the environment the app was started with. If `pnpm` or `node` is only on your path in a terminal, start the app from that terminal.
-- **A preview says Failed and the log ends in `next: command not found`** (or another tool of the project itself). The preview's folder is a fresh checkout without the project's installed dependencies. Set a prepare command: `npm ci`, `pnpm install --frozen-lockfile`.
+- **A preview says Failed and the log ends in `next: command not found`** (or another tool of the project itself). The preview's folder is a fresh checkout without the project's installed dependencies. Set a prepare command: `npm ci`, `pnpm install --frozen-lockfile`. The strip says so when the project has none, and the project's settings offer the one for its lockfile. With a prepare command set, press **Restart**: the app prepares again whenever what the prepare command installed is no longer in the folder.
 - **The log ends in `Doppler Error: You must specify a project`.** Doppler remembers its project and config per folder, and a preview runs in another folder than your project's. Name both in the dev command: `doppler run --project <project> --config <config> -- npm run dev` ([Secure Foundation projects](#secure-foundation-projects)).
 - **The log ends in a question** ("Upgrade now?", "Use another port? (y/n)", "Ok to proceed?"). A preview's commands have no terminal and no input: their input is closed, so a command that reads an answer gets the end of input at once, and their output is not a terminal. Nobody can answer in a preview.
   - Most tools check for a terminal first and don't ask. `next dev`'s upgrade menu ("Installed Next.js version … is affected by a known security vulnerability", then **Upgrade now**, **Skip**) is only shown in a terminal; in a preview it is skipped and the dev server starts.
@@ -218,6 +233,7 @@ Read this before you set a project up: a dev preview runs the project's code on 
 - Previews run on the computer the app runs on. Sessions in a sandbox (Docker) have none.
 - A prepare command that hasn't finished after 15 minutes is ended, and the preview fails.
 - The prepare command runs again when a lockfile at the root of the worktree changes (`pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `bun.lock`, `Cargo.lock`, `go.sum`, `Gemfile.lock` and the like), or when you change the command. A session's preview checks when it starts; the PM thread's also after every update.
+- It also runs again when what it installed is gone. The app notes which entries at the top of the folder the prepare command made or changed (`node_modules`, `.venv`), without knowing any name in advance, and prepares again before the next start when one of them is missing: a checkout that was made again, or dependencies someone removed. It looks at the top of the folder only, so an install that is damaged inside (a single package removed from `node_modules`) or that puts nothing in the folder is not noticed; change the lockfile or the command, or remove the installed folder, to prepare again. After updating from a version that didn't keep this note, every folder is prepared once more.
 - A session's preview is off again after the app restarts; the PM thread's comes back by itself when you had switched it on.
 - After a crash of the app, leftovers are found through the dev command's own process. If that process died too and only what it started lives on, the app can't prove those are its own and leaves them for you to end. On Windows nothing is cleaned up after a crash.
 - The UI asks for a preview's state every few seconds while a thread is open, so a change can take a moment to show.

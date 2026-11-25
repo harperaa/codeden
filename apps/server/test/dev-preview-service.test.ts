@@ -71,18 +71,25 @@ describe("nothing runs until a person confirmed a command", () => {
     expect(env.procs.map((p) => p.spec.command)).toEqual(["my-confirmed-dev"]);
   });
 
-  it("offers no suggestion to another device, and none once a command is set", async () => {
+  it("offers no suggestion to another device, and none once a prepare command is set", async () => {
     const project = env.projects.get("app");
     writeFileSync(
       join(project?.path ?? "", "package.json"),
       JSON.stringify({ scripts: { dev: "x" } }),
     );
-    expect(env.service.project("app", false).suggestion).toEqual({
+    writeFileSync(join(project?.path ?? "", "package-lock.json"), "{}\n");
+    const suggestion = {
       command: "npm run dev",
+      prepareCommand: "npm ci",
       reason: "package.json has a dev script",
-    });
+    };
+    expect(env.service.project("app", false).suggestion).toEqual(suggestion);
     expect(env.service.project("app", true).suggestion).toBeNull();
+    // Stored without a prepare command: still sent, so the form can offer that one.
     await env.service.setProject("app", SETTINGS);
+    expect(env.service.project("app", false).suggestion).toEqual(suggestion);
+    expect(env.service.project("app", true).suggestion).toBeNull();
+    await env.service.setProject("app", { ...SETTINGS, prepareCommand: "npm ci" });
     expect(env.service.project("app", false).suggestion).toBeNull();
   });
 
@@ -382,16 +389,17 @@ describe("when a preview stops", () => {
 
   it("a dev command that never came up fails after its one retry", async () => {
     await start("s1");
-    env.procs[0]?.exit(127);
+    // Not 127: that one gets a hint of its own (`dev-preview-prepared.test.ts`).
+    env.procs[0]?.exit(2);
     await env.procs[0]?.exited;
     await Promise.resolve();
-    env.procs[1]?.exit(127);
+    env.procs[1]?.exit(2);
     await env.procs[1]?.exited;
     await Promise.resolve();
     expect(env.procs).toHaveLength(2);
     expect(env.service.sessionState("s1", false)).toMatchObject({
       status: "failed",
-      message: "The dev command exited with code 127 before anything was listening.",
+      message: "The dev command exited with code 2 before anything was listening.",
     });
   });
 });

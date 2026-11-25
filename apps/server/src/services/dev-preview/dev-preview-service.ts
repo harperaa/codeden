@@ -206,7 +206,10 @@ export class DevPreviewService {
       projectId,
       config,
       // Whole settings are the better offer; one for a single field would contradict them.
-      suggestion: config || remote || recommended ? null : suggestDevCommand(project.path),
+      // With stored settings it is still sent while they have no prepare command: the form
+      // offers that one, since a fresh checkout has nothing installed.
+      suggestion:
+        config?.prepareCommand || remote || recommended ? null : suggestDevCommand(project.path),
       recommended,
       baseBranch: previewBaseBranch(project),
       notice: null,

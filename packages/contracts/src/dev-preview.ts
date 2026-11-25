@@ -171,16 +171,48 @@ export const DevPreviewRecommended = z.object({
 });
 export type DevPreviewRecommended = z.infer<typeof DevPreviewRecommended>;
 
+/**
+ * Commands the app offers for a project whose folder has a `dev` script. Both are the app's own
+ * fixed text, chosen by which lockfile the folder has (`pnpm dev` with
+ * `pnpm install --frozen-lockfile`, `npm run dev` with `npm ci`): never a string the repository
+ * wrote. They only fill the form or the switch's question, and are stored or run only when the
+ * person confirms them.
+ */
+export const DevPreviewSuggestion = z.object({
+  /** The dev command. */
+  command: z.string(),
+  /**
+   * The command that installs the dependencies in a fresh checkout, by the same lockfile. Null
+   * when the folder has no lockfile the app knows: then there is nothing safe to offer.
+   */
+  prepareCommand: z.string().nullable().default(null),
+  /** Why these, as the form says it: "package.json has a dev script". */
+  reason: z.string(),
+});
+export type DevPreviewSuggestion = z.infer<typeof DevPreviewSuggestion>;
+
+/**
+ * The end of a failed preview's `message` when its dev command ended as one whose programs
+ * aren't there (exit code 127, or a "command not found" line) and the project's settings have no
+ * prepare command. The strip shows it with a link to the settings. It is a hint and nothing
+ * more: the app installs nothing and changes no settings by itself.
+ */
+export const DEV_PREVIEW_NO_PREPARE_HINT =
+  "The dependencies probably aren't installed in this checkout: add a prepare command in the project's Dev preview settings.";
+
 /** `GET /api/dev-preview/projects/:id`: what the project's settings show. */
 export const DevPreviewProject = z.object({
   projectId: Id,
   /** Null until a person confirmed a dev command. Nothing runs before that. */
   config: DevPreviewConfig.nullable(),
   /**
-   * A dev command the app noticed in the project folder (a `dev` script), offered to prefill
-   * the form. It is never stored or run unless the person saves and confirms it.
+   * Commands the app can offer by what it noticed in the project folder (a `dev` script, a
+   * lockfile), to prefill the form. Sent while nothing is stored, and with stored settings that
+   * have no prepare command, so the form can offer that one. Null otherwise, for another device
+   * and when `recommended` has whole settings. Never stored or run unless the person saves and
+   * confirms.
    */
-  suggestion: z.object({ command: z.string(), reason: z.string() }).nullable(),
+  suggestion: DevPreviewSuggestion.nullable(),
   /**
    * Whole settings for a project the app recognised (a checkout of its own repository). Sent
    * with stored settings too, so the form can say when those can't work. Null for any other

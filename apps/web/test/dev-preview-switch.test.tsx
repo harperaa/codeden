@@ -70,7 +70,11 @@ const baseState = (over: Partial<DevPreviewState> = {}): DevPreviewState =>
 const view = (over: Partial<DevPreviewProject> = {}): DevPreviewProject => ({
   projectId: PROJECT,
   config: null,
-  suggestion: { command: "pnpm dev", reason: "package.json has a dev script" },
+  suggestion: {
+    command: "pnpm dev",
+    prepareCommand: "pnpm install --frozen-lockfile",
+    reason: "package.json has a dev script",
+  },
   recommended: null,
   baseBranch: "main",
   notice: null,
@@ -79,7 +83,7 @@ const view = (over: Partial<DevPreviewProject> = {}): DevPreviewProject => ({
 });
 const suggested = {
   command: "pnpm dev",
-  prepareCommand: null,
+  prepareCommand: "pnpm install --frozen-lockfile" as string | null,
   portVars: ["PORT"],
   urlFrom: "port" as const,
   urlPattern: null,
@@ -125,6 +129,10 @@ describe("a session's switch in a project with nothing stored", () => {
     const dialog = await screen.findByTestId("dev-preview-confirm");
     expect(dialog.textContent).toContain("Run these commands on this computer?");
     expect(dialog.textContent).toContain("pnpm dev");
+    // The install command for the same lockfile is shown with it, so nothing is missing.
+    expect(dialog.textContent).toContain("Prepare command");
+    expect(dialog.textContent).toContain("pnpm install --frozen-lockfile");
+    expect(dialog.textContent).not.toContain("There is no prepare command");
     expect(dialog.textContent).toContain("Ports go in PORT.");
     expect(dialog.textContent).toContain("No preview starts for the PM thread.");
     expect(dialog.textContent).toContain("This session's preview starts once you allow them.");
@@ -162,6 +170,40 @@ describe("a session's switch in a project with nothing stored", () => {
     expect(confirmProject).toHaveBeenCalledWith(PROJECT, { ...suggested, pmEnabled: false });
     expect(order).toEqual(["stored", "started"]);
     await waitFor(() => expect(screen.queryByTestId("dev-preview-confirm")).toBeNull());
+  });
+
+  it("warns that there is no prepare command only when the offer really has none", async () => {
+    const confirmProject = vi.fn(async () => view());
+    renderWithClient(
+      <DevPreviewBar session={agent} />,
+      clientWith({
+        session: async () => sessionState(),
+        // A dev script and no lockfile the app knows: no install command to offer.
+        project: async () =>
+          view({
+            suggestion: {
+              command: "npm run dev",
+              prepareCommand: null,
+              reason: "package.json has a dev script",
+            },
+          }),
+        confirmProject,
+        startSession: async () => sessionState({ configured: true }),
+      }),
+    );
+    fireEvent.click(await ready());
+    const dialog = await screen.findByTestId("dev-preview-confirm");
+    expect(dialog.textContent).toContain("There is no prepare command");
+    expect(dialog.textContent).not.toContain("Prepare command");
+    fireEvent.click(screen.getByTestId("dev-preview-confirm-run"));
+    await waitFor(() =>
+      expect(confirmProject).toHaveBeenCalledWith(PROJECT, {
+        ...suggested,
+        command: "npm run dev",
+        prepareCommand: null,
+        pmEnabled: false,
+      }),
+    );
   });
 
   it("Edit settings in the dialog opens the project's settings and stores nothing", async () => {
