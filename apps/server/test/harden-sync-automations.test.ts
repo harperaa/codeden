@@ -181,6 +181,24 @@ describe("the shipped upstream-sync review definitions", () => {
       "`unknown`, no `state` line, or an error: GitHub could not say. Finish, having fetched nothing",
     );
     expect(stepOne).toContain("A fetch by commit id, never of the branch");
+    // An empty or unchecked id must never reach git: it would fetch upstream's tip.
+    const fullId = stepOne.indexOf(
+      "**ELIGIBLE must be a full commit id before anything is fetched**",
+    );
+    expect(fullId).toBeGreaterThan(asks);
+    expect(fetchesUpstream).toBeGreaterThan(fullId);
+    expect(stepOne).toContain(
+      "An empty `commit` line, a shorter id or anything else is not a yes: treat the answer as `unknown` and fetch nothing.",
+    );
+    expect(stepOne).toContain(
+      "**Write the id out in the command, all 40 characters**, here and in the push of step 3: never a shell variable, a command substitution or a pipe from the helper in its place.",
+    );
+    expect(first).toContain("`git push origin <ELIGIBLE>:refs/heads/<branch>`");
+    // No command either prompt shows takes its commit from a variable or a substitution.
+    for (const text of [first, second]) {
+      const commands = text.match(/`(?:git|gh|scripts\/harden\/)[^`]*`/g) ?? [];
+      expect(commands.filter((command) => /\$[({A-Za-z_]/.test(command))).toEqual([]);
+    }
     expect(first).toContain(
       "**first parent is ELIGIBLE and second parent is the current `origin/WORKING` tip**",
     );
@@ -192,6 +210,14 @@ describe("the shipped upstream-sync review definitions", () => {
     expect(checks).toBeGreaterThan(0);
     expect(stepTwo.indexOf("`git fetch --no-tags origin <head>`")).toBeGreaterThan(checks);
     expect(stepTwo.indexOf("**The upstream changes.**")).toBeGreaterThan(checks);
+    const fullIds = stepTwo.indexOf(
+      "**Every commit id you hand to the helper or to `git fetch` in this step is a full one, written out in the command**",
+    );
+    expect(fullIds).toBeGreaterThan(0);
+    expect(checks).toBeGreaterThan(fullIds);
+    expect(stepTwo).toContain(
+      "If an id you need is empty or not a full id (the head from the API, or the helper's `newest` line), fetch nothing and treat the answer as `unknown`.",
+    );
     expect(stepTwo).toContain(
       `Add \`${HARDEN_SYNC_LABELS.hold}\`, read and run nothing from it, fetch nothing of it, and report`,
     );

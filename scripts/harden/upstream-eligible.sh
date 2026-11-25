@@ -46,6 +46,14 @@
 #   next     when the next commit comes out of quarantine; empty when none is waiting.
 #   finding  a rewrite of upstream's history, for the owner; empty when there is none.
 #
+# Using the answer. `commit` is empty on every answer but `eligible`, and an empty argument
+# is not harmless to git: `git fetch <url> ""` fetches the remote's HEAD (upstream's newest
+# commit) and `git push <remote> "":<ref>` deletes that ref. So a caller never pipes this
+# script straight into a variable it then hands to git: that also loses the exit status. It
+# keeps the output, and goes on only when the exit status is 0, the `state` line is exactly
+# `eligible` and `commit` is a full id of 40 lowercase hexadecimal characters. The README's
+# steps by hand do exactly that, and upstream-eligible-readme.test.mjs runs them.
+#
 # --target-ref is the working branch as this clone has it (default: `origin`'s
 # remote-tracking ref of HARDEN_BRANCH); update that one branch from origin first. It runs
 # inside a full clone (not a shallow one) and changes nothing. Which upstream and which
@@ -65,7 +73,7 @@ target_ref=""
 case "$mode" in
   latest) shift ;;
   check) asked="${2:-}"; shift 2 || true ;;
-  *) sed -n '2,55p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,63p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
 while [ $# -gt 0 ]; do
   case "$1" in

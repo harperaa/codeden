@@ -32,6 +32,8 @@ commit: 1a2b3c4d5e6f...
 
 `scripts/harden/upstream-eligible.sh check <commit>` answers for one commit (`eligible`, `not-eligible`, `rewritten`, `unknown`): it is out of quarantine when it is the newest such commit or in its history.
 
+**Using the answer by hand.** `commit` is empty on every answer but `eligible`, and git does not refuse an empty argument: `git fetch <url> ""` fetches the remote's `HEAD`, which is upstream's newest commit, and `git push origin "":refs/heads/<branch>` deletes that branch. So don't pipe the helper into a variable and hand that to git; the pipe also hides its exit status. Keep its output and go on only when it exited 0, its `state` line is exactly `eligible` and `commit` is a full id of 40 lowercase hexadecimal characters. The README's steps ("How syncs get reviewed and merged") are written that way, and a test runs them against every answer.
+
 **The two waits, in order.**
 
 | | When | Decided by |
