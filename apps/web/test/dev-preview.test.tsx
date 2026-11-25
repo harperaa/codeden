@@ -349,6 +349,29 @@ describe("the project's dev preview settings", () => {
     );
   });
 
+  it("the mock client offers the prepare command for saved settings without one, as the server does", async () => {
+    const client = createMockClient();
+    const saved = {
+      command: "pnpm dev",
+      prepareCommand: null,
+      portVars: ["PORT"],
+      urlFrom: "port" as const,
+      urlPattern: null,
+      pmEnabled: false,
+    };
+    // A dev command alone is stored: the suggestion stays, for its prepare command.
+    expect((await client.devPreview.confirmProject(PROJECT, saved)).suggestion).toMatchObject({
+      prepareCommand: "pnpm install --frozen-lockfile",
+    });
+    renderWithClient(<DevPreviewProjectSettings project={project} />, client);
+    const offer = await screen.findByTestId("dev-preview-prepare-suggestion");
+    expect(offer.textContent).toContain("pnpm install --frozen-lockfile");
+    expect(screen.queryByTestId("dev-preview-suggestion")).toBeNull();
+    // Stored with a prepare command, there is nothing left to offer.
+    const full = { ...saved, prepareCommand: "pnpm install --frozen-lockfile" };
+    expect((await client.devPreview.confirmProject(PROJECT, full)).suggestion).toBeNull();
+  });
+
   it("says what is wrong instead of asking, and has nothing to save when nothing changed", async () => {
     renderWithClient(
       <DevPreviewProjectSettings project={project} />,

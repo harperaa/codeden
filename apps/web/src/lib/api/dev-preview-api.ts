@@ -108,8 +108,9 @@ export function mockDevPreviewApi(
   const view = (projectId: string): DevPreviewProject => ({
     projectId,
     config: configs.get(projectId) ?? null,
+    // As the server: still offered for stored settings that have no prepare command.
     suggestion:
-      configs.has(projectId) || world.hasDevScript?.(projectId) === false
+      configs.get(projectId)?.prepareCommand || world.hasDevScript?.(projectId) === false
         ? null
         : {
             command: "pnpm dev",
