@@ -16,10 +16,13 @@ import type { LaunchArgs } from "./args";
 import { AppBadge } from "./badge";
 import { NativeBrowserFeature } from "./browser/feature";
 import { type Connection, connect, launchUrl } from "./connection";
+import { Diagnostics } from "./diagnostics";
+import { exportDiagnostics } from "./diagnostics-menu";
 import { armQuitWatchdog, forceExit } from "./exit";
 import { registerBridge } from "./ipc";
 import { appMenuTemplate } from "./menu";
-import { homeFiles } from "./server-plan";
+import { loadAfterReady, waitForServer } from "./recovery";
+import { homeFiles, mayReconnect, serverHealthy } from "./server-plan";
 import {
   applyLaunchAtLogin,
   fileLogger,
@@ -39,6 +42,15 @@ import { windowShot } from "./window-shot";
 const DOCS_URL = hardenDocsUrl("desktop.md");
 /** Longest a quit may take (browser hand-off 15 s + server stop up to 30 s) before it's forced. */
 const QUIT_LIMIT_MS = 45_000;
+
+type QuitInitiator =
+  | "menu"
+  | "tray"
+  | "window"
+  | "server-stop"
+  | "server-crash"
+  | "startup"
+  | "system";
 
 /**
  * The desktop app (§17): one window on the server's UI, a tray with live counts, the app
@@ -61,6 +73,10 @@ export class DesktopApp {
   private pendingPath: string | null = null;
   private loaded = false;
   private quitting = false;
+  private quitInitiator: QuitInitiator = "system";
+  private readonly diagnostics: Diagnostics;
+  private uiLoad: Connection | undefined;
+  private connecting = false;
   private quitReady = false;
   private standaloneTimer: NodeJS.Timeout | undefined;
 
@@ -71,7 +87,9 @@ export class DesktopApp {
   private notifiedUpdate: string | null = null;
 
   constructor(private readonly args: LaunchArgs) {
-    this.log = fileLogger(join(homeFiles(args.home).logs, "desktop.log"));
+    const { logs } = homeFiles(args.home);
+    this.log = fileLogger(join(logs, "desktop.log"));
+    this.diagnostics = new Diagnostics(join(logs, "desktop-diagnostics.json"));
     if (args.deepLink) this.pendingPath = this.pathFor(args.deepLink);
   }
 
@@ -100,6 +118,16 @@ export class DesktopApp {
       this.notifyUpdate();
     });
 
+    app.on("child-process-gone", (_event, details) => {
+      this.log(
+        `app: ${details.type} child exited (code ${details.exitCode}, reason ${details.reason})`,
+      );
+      this.diagnostics.record({
+        kind: "child-exit",
+        reason: details.reason,
+        code: details.exitCode,
+      });
+    });
     Menu.setApplicationMenu(Menu.buildFromTemplate(this.menu()));
     this.tray = new AppTray(
       this.asset(process.platform === "darwin" ? "harden/trayTemplate.png" : "harden/tray.png"),
@@ -107,7 +135,7 @@ export class DesktopApp {
         open: () => this.show(),
         openInbox: () => this.navigate("/inbox"),
         update: (command) => void this.runUpdate(command),
-        quit: () => app.quit(),
+        quit: () => this.quit("tray"),
       },
     );
     this.window = new MainWindow({
@@ -116,6 +144,18 @@ export class DesktopApp {
       stateFile: join(homeFiles(this.args.home).desktop, "window-state.json"),
       show: !this.args.hidden && !openedAtLogin(),
       hideOnClose: () => this.status.settings?.desktop.closeToTray ?? true,
+      quit: () => this.quit("window"),
+      onRendererGone: (details, retry) => {
+        this.diagnostics.record({
+          kind: "renderer-exit",
+          reason: details.reason,
+          code: details.exitCode,
+        });
+        if (this.uiLoad === this.conn) return;
+        this.loaded = false;
+        if (retry) void this.loadUi();
+        else void this.window.showRecovery();
+      },
       log: this.log,
     });
     this.badge = new AppBadge(() => this.window.window, this.asset("badge.png"));
@@ -136,12 +176,20 @@ export class DesktopApp {
 
   /** Connect to (or start) the server and load the UI. */
   private async open(): Promise<void> {
+    if (this.conn || this.connecting || this.quitting) return;
+    this.connecting = true;
     try {
       this.conn = await connect({
         args: this.args,
         serverEntry: join(this.dist, "server.js"),
         onUpdateCommand: (id, command) => void this.onServerCommand(id, command),
-        onUnexpectedExit: (code) => void this.onServerExit(code),
+        onExit: (exit) => this.diagnostics.record({ kind: "server-exit", ...exit }),
+        onUnexpectedExit: (code) => {
+          void this.onServerExit(code).catch(() => {
+            this.log("app: server restart failed");
+            return this.window.showRecovery();
+          });
+        },
         log: this.log,
       });
     } catch (error) {
@@ -152,14 +200,18 @@ export class DesktopApp {
         message: `${HARDEN_PRODUCT_NAME} could not start its server.`,
         detail: `${error instanceof Error ? error.message : String(error)}\n\nSee ${homeFiles(this.args.home).logs}.`,
       });
-      app.quit();
+      await this.window.showRecovery();
+      return;
+    } finally {
+      this.connecting = false;
+    }
+    if (this.quitting) {
+      await this.conn.server?.stop({ stopRunner: false });
       return;
     }
     this.conn.server?.send({ type: "update.state", state: this.updates.state });
     this.browser.connect(this.conn);
-    await this.window.load(launchUrl(this.conn, this.pendingPath ?? "/"));
-    this.pendingPath = null;
-    this.loaded = true;
+
     this.monitor?.stop();
     this.monitor = new ActivityMonitor({
       baseUrl: this.conn.url,
@@ -168,6 +220,64 @@ export class DesktopApp {
     });
     this.monitor.start();
     if (!this.conn.server) this.startStandaloneUpdates();
+    await this.loadUi();
+  }
+
+  private async loadUi(): Promise<void> {
+    const conn = this.conn;
+    if (!conn || this.quitting || this.uiLoad === conn) return;
+    this.uiLoad = conn;
+    const pendingPath = this.pendingPath;
+    const load = async () => {
+      if (this.quitting || this.conn !== conn) return;
+      await this.window.load(launchUrl(conn, pendingPath ?? "/"));
+    };
+    try {
+      await loadAfterReady(load, () =>
+        waitForServer(conn.url, () => !this.quitting && this.conn === conn),
+      );
+      if (this.quitting || this.conn !== conn) return;
+      this.loaded = true;
+      const nextPath = this.pendingPath;
+      this.pendingPath = null;
+      if (nextPath && nextPath !== pendingPath) this.navigate(nextPath);
+    } catch (error) {
+      if (this.quitting || this.conn !== conn) return;
+      this.log(`app: UI navigation failed: ${String(error)}`);
+      this.loaded = false;
+      await this.window.showRecovery();
+    } finally {
+      if (this.uiLoad === conn) this.uiLoad = undefined;
+    }
+  }
+
+  private async retryLoading(): Promise<void> {
+    if (this.quitting) return;
+    const conn = this.conn;
+    if (conn && !conn.server) {
+      const reconnect = !(await serverHealthy(conn.url)) && (await mayReconnect(this.args.home));
+      if (this.conn !== conn || this.quitting) return;
+      if (reconnect) {
+        this.conn = undefined;
+        this.loaded = false;
+        this.monitor?.stop();
+        clearInterval(this.standaloneTimer);
+      }
+    }
+    if (this.conn) await this.loadUi();
+    else await this.open();
+  }
+
+  private quit(reason: QuitInitiator): void {
+    if (this.quitting) return;
+    this.quitInitiator = reason;
+    app.quit();
+  }
+
+  startupFailed(): void {
+    this.log("app: quit initiated by startup failure");
+    this.diagnostics.record({ kind: "quit", reason: "startup" });
+    forceExit(1);
   }
 
   show(): void {
@@ -205,6 +315,8 @@ export class DesktopApp {
     event.preventDefault();
     if (this.quitting) return;
     this.quitting = true;
+    this.log(`app: quit initiated by ${this.quitInitiator}`);
+    this.diagnostics.record({ kind: "quit", reason: this.quitInitiator });
     // Every step below is bounded, but quitting must finish even if one isn't: a timer here,
     // and a separate process for when the main thread itself is stuck in native shutdown.
     const watchdog = setTimeout(() => {
@@ -240,6 +352,8 @@ export class DesktopApp {
 
   /** Before the installer runs: stop the server and drain the runner (as `codeden stop`). */
   private async prepareInstall(): Promise<void> {
+    this.log("app: preparing to quit for an update");
+    this.diagnostics.record({ kind: "quit", reason: "update" });
     this.window.allowClose();
     this.monitor?.stop();
     const server = this.conn?.server;
@@ -266,10 +380,13 @@ export class DesktopApp {
 
   private async onServerExit(code: number | null): Promise<void> {
     if (this.quitting) return;
+    this.loaded = false;
+    this.conn = undefined;
+    this.monitor?.stop();
     if (code === 0) {
       // Stopped on purpose (`codeden stop` from a terminal): quit with it.
       this.log("app: the server was stopped; quitting");
-      app.quit();
+      this.quit("server-stop");
       return;
     }
     const { response } = await dialog.showMessageBox({
@@ -280,8 +397,9 @@ export class DesktopApp {
       buttons: ["Restart", "Quit"],
       defaultId: 0,
     });
+    if (this.quitting) return;
     if (response === 0) await this.open();
-    else app.quit();
+    else this.quit("server-crash");
   }
 
   private onStatus(status: ServerStatus): void {
@@ -307,7 +425,9 @@ export class DesktopApp {
 
   /** Attached to a server started by `codeden`: follow the update mode here (§17). */
   private startStandaloneUpdates(): void {
+    const conn = this.conn;
     const tick = () => {
+      if (this.conn !== conn) return;
       const settings = this.status.settings;
       if (!settings) return;
       const state = this.updates.state;
@@ -362,7 +482,11 @@ export class DesktopApp {
       },
       openDocs: () => void shell.openExternal(DOCS_URL),
       openLogs: () => void shell.openPath(homeFiles(this.args.home).logs),
-      quit: () => app.quit(),
+      exportDiagnostics: () => void exportDiagnostics(this.diagnostics),
+      retryLoading: () => {
+        void this.retryLoading().catch(() => this.log("app: could not retry loading the UI"));
+      },
+      quit: () => this.quit("menu"),
       zoom: (command) => {
         this.window?.zoom(command);
         this.browser?.browsers.layout();

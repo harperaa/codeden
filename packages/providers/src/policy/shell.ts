@@ -280,7 +280,8 @@ class Lexer {
         return text;
       }
       if (c === "\\" && this.dialect !== "powershell" && next && '"\\$`\n'.includes(next)) {
-        text += next;
+        // Read as written (PowerShell, cmd), `\\` stays: `"\\?\C:\x"` is a device path there.
+        text += next === "\\" && this.escapes === "keep" ? "\\\\" : next;
         this.i += 2;
       } else if (c === "`" && this.dialect !== "posix" && next !== undefined) {
         text += next;

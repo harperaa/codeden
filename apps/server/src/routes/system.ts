@@ -6,6 +6,8 @@ import {
   HideProviderHistoryRequest,
   type HideProviderHistoryResponse,
   LoginToolId,
+  ProjectModelsQuery,
+  type ProjectModelsResponse,
   type ProviderHistoryResponse,
   type RefreshModelsResponse,
   SecretKey,
@@ -17,6 +19,7 @@ import { z } from "zod";
 import type { AppServices } from "../services/container";
 import { badRequest } from "../services/errors";
 import { listDirectories } from "../services/files/fs-browser";
+import { projectProviderModels } from "../services/providers/project-models";
 import { refreshProviderModels } from "../services/runner-port";
 import { contentDisposition } from "./content-disposition";
 import { jsonBody, queryOf } from "./validate";
@@ -45,13 +48,24 @@ export function setupRoutes(s: AppServices) {
 }
 
 /**
- * `/api/providers`: the runner's providers. Their model lists arrive with the runner status.
- * `history` finds and hides CodeDen's conversations in a provider's own apps.
+ * `/api/providers`: the runner's providers. Their model lists arrive with the runner status;
+ * `models?projectId=` is one provider's list for a project, with the project's own config
+ * (#643). `history` finds and hides CodeDen's conversations in a provider's own apps.
  */
 export function providerRoutes(s: AppServices) {
   return new Hono()
     .post("/:id/refresh-models", async (c) => {
       const body: RefreshModelsResponse = await refreshProviderModels(s.runner, c.req.param("id"));
+      return c.json(body);
+    })
+    .get("/:id/models", queryOf(ProjectModelsQuery), async (c) => {
+      const query = c.req.valid("query");
+      const body: ProjectModelsResponse = await projectProviderModels(
+        s.runner,
+        s.projects.get(query.projectId),
+        c.req.param("id"),
+        query.refresh !== undefined,
+      );
       return c.json(body);
     })
     .get("/:id/history", async (c) => {

@@ -51,7 +51,14 @@ beforeAll(async () => {
   process.env.FAKE_OPENCODE_STATE = join(home, "opencode-state.json");
   runner = await startRunner({
     home,
-    adapters: [new OpenCodeAdapter({ executable: fakeOpenCode, noGuardPlugin: true })],
+    adapters: [
+      new OpenCodeAdapter({
+        executable: fakeOpenCode,
+        noGuardPlugin: true,
+        // The fake's lists are complete at once: settle them in milliseconds.
+        catalog: { pollMs: 10, settlePolls: 2 },
+      }),
+    ],
   });
   server = await startServer({
     port: 0,

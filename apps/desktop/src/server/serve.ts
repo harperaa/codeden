@@ -30,7 +30,13 @@ export async function serve(opts: { home?: string; port: number; fake: boolean }
     dataDir: home,
     token,
     enableFakeProvider: opts.fake || process.env.CODEDEN_FAKE_PROVIDER === "1",
-    onShutdownRequest: () => process.exit(0),
+    onShutdownStart: () => {
+      closing = true;
+    },
+    onShutdownRequest: (exitCode) => {
+      console.log(`server: shutdown requested through the API (code ${exitCode})`);
+      process.exit(exitCode);
+    },
     selfUpdate: {
       source: "desktop",
       restartCommand: `Quit ${HARDEN_PRODUCT_NAME} from the tray and open it again`,
@@ -44,10 +50,13 @@ export async function serve(opts: { home?: string; port: number; fake: boolean }
     if (closing) return;
     closing = true;
     // Commands still waiting (an install in progress) end with this process, not with an error.
-    void server
-      .close({ stopRunner })
-      .catch((error: unknown) => console.error(error))
-      .finally(() => process.exit(0));
+    void server.close({ stopRunner }).then(
+      () => process.exit(0),
+      (error: unknown) => {
+        console.error(error);
+        process.exit(1);
+      },
+    );
   };
   process.on("message", (raw) => {
     const parsed = DesktopHostMessage.safeParse(raw);
@@ -63,7 +72,11 @@ export async function serve(opts: { home?: string; port: number; fake: boolean }
   });
   // A signal while already closing means the app gave up waiting: exit now.
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
-    process.on(signal, () => (closing ? process.exit(0) : close(false)));
+    process.on(signal, () => {
+      console.log(`server: received ${signal}`);
+      if (closing) process.exit(1);
+      close(false);
+    });
   }
 
   console.log(`${formatHardenVersion()} is running at ${server.url}`);

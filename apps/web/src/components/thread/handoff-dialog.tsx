@@ -152,6 +152,7 @@ function HandoffForm({
           <div className="w-fit rounded-lg border border-border px-1 py-0.5">
             <ModelPicker
               providers={providers}
+              projectId={session.projectId}
               value={choice}
               onChange={setPicked}
               disabled={handoff.isPending}

@@ -12,6 +12,8 @@ const fake = {
   path: process.execPath,
   script: join(import.meta.dirname, "fixtures", "fake-opencode", "opencode.mjs"),
 };
+/** The fake's lists are complete at once: settle them in milliseconds, not the product's ~1.6 s. */
+const catalog = { pollMs: 10, settlePolls: 2 };
 
 afterEach(() => {
   delete process.env.FAKE_OPENCODE_MODE;
@@ -34,7 +36,10 @@ describe("OpenCode detection", () => {
   });
 
   it("detects version, providers and credentials through a probe", async () => {
-    const status = await detectOpenCode({ executable: fake, probe: (exe) => probeOpenCode(exe) });
+    const status = await detectOpenCode({
+      executable: fake,
+      probe: (exe) => probeOpenCode(exe, { catalog }),
+    });
     expect(status).toMatchObject({
       installed: true,
       version: "2.2.7",
@@ -48,7 +53,12 @@ describe("OpenCode detection", () => {
 
   it("asks for a provider when none is configured", async () => {
     process.env.FAKE_OPENCODE_MODE = "no-providers";
-    const status = await detectOpenCode({ executable: fake, probe: (exe) => probeOpenCode(exe) });
+    // An empty catalog never settles early, so this is where the empty-list deadline is
+    // exercised; a short one, so the test needn't wait for the product's 12 s.
+    const status = await detectOpenCode({
+      executable: fake,
+      probe: (exe) => probeOpenCode(exe, { catalog: { ...catalog, deadlineMs: 300 } }),
+    });
     expect(status.loggedIn).toBe(false);
     expect(status.issues[0]).toMatchObject({
       code: "not_logged_in",
@@ -101,7 +111,7 @@ describe("OpenCode model discovery", () => {
     writeFileSync(log, "");
     process.env.FAKE_OPENCODE_LOG = log;
     try {
-      const adapter = new OpenCodeAdapter({ executable: fake });
+      const adapter = new OpenCodeAdapter({ executable: fake, catalog });
       let changes = 0;
       adapter.onModelsChanged(() => changes++);
       await adapter.refreshModels();
@@ -130,7 +140,7 @@ describe("OpenCode model discovery", () => {
 
   it("keeps an honest fallback when the list cannot be loaded", async () => {
     process.env.FAKE_OPENCODE_MODE = "models-error";
-    const adapter = new OpenCodeAdapter({ executable: fake });
+    const adapter = new OpenCodeAdapter({ executable: fake, catalog });
     await adapter.refreshModels();
     expect(adapter.models()).toHaveLength(1);
     expect(adapter.models()[0]).toMatchObject({ id: "default", isDefault: true });
@@ -139,7 +149,7 @@ describe("OpenCode model discovery", () => {
 
   it("gives up on a server that never starts", async () => {
     process.env.FAKE_OPENCODE_MODE = "hang";
-    const adapter = new OpenCodeAdapter({ executable: fake, probeTimeoutMs: 800 });
+    const adapter = new OpenCodeAdapter({ executable: fake, probeTimeoutMs: 800, catalog });
     const started = Date.now();
     await adapter.refreshModels();
     expect(Date.now() - started).toBeLessThan(5000);
@@ -212,7 +222,7 @@ describe("OpenCode model discovery", () => {
   });
 
   it("declares honest capabilities", () => {
-    const caps = new OpenCodeAdapter({ executable: fake }).capabilities();
+    const caps = new OpenCodeAdapter({ executable: fake, catalog }).capabilities();
     expect(caps).toMatchObject({
       resume: true,
       steer: true,

@@ -1,5 +1,5 @@
 import { type ChildProcess, fork } from "node:child_process";
-import { mkdirSync, openSync, renameSync, statSync } from "node:fs";
+import { closeSync, mkdirSync, openSync, renameSync, statSync } from "node:fs";
 import { dirname } from "node:path";
 
 /** The server log is moved aside to `<file>.1` (one copy kept) when it grows past this. */
@@ -40,6 +40,12 @@ export class ServerStartError extends Error {
   }
 }
 
+export interface ServerExit {
+  code: number | null;
+  signal: NodeJS.Signals | null;
+  reason: "stopped" | "expected" | "unexpected" | "startup";
+}
+
 export interface ServerProcessOptions {
   /** `dist/server.js`. */
   entry: string;
@@ -50,6 +56,9 @@ export interface ServerProcessOptions {
   logFile: string;
   /** The server asks the updater to do something; answer with `send({ type: "update.done" })`. */
   onUpdateCommand: (id: string, command: DesktopUpdateCommand) => void;
+  /** How long the child can take to report readiness. Defaults to 60 seconds. */
+  startupTimeoutMs?: number;
+  onExit?: (exit: ServerExit) => void;
   /** The process exited without being asked to (crash, or `codeden stop` from a terminal). */
   onUnexpectedExit: (code: number | null) => void;
   log: (message: string) => void;
@@ -79,49 +88,78 @@ export class ServerProcess {
     const out = openSync(this.opts.logFile, "a");
     const args = ["--home", this.opts.home, "--port", String(this.opts.port)];
     if (this.opts.fake) args.push("--fake");
-    const child = fork(this.opts.entry, args, {
-      stdio: ["ignore", out, out, "ipc"],
-      env: {
-        ...process.env,
-        ...(loginPath ? { PATH: loginPath } : {}),
-        CODEDEN_DEPS_INSTALLER: "registry",
-      },
-      windowsHide: true,
-    });
+    let child: ChildProcess;
+    try {
+      child = fork(this.opts.entry, args, {
+        stdio: ["ignore", out, out, "ipc"],
+        env: {
+          ...process.env,
+          ...(loginPath ? { PATH: loginPath } : {}),
+          CODEDEN_DEPS_INSTALLER: "registry",
+        },
+        windowsHide: true,
+      });
+    } finally {
+      closeSync(out);
+    }
     this.child = child;
     this.opts.log(`server: started pid ${child.pid} (port ${this.opts.port})`);
 
     return new Promise<ServerReady>((resolve, reject) => {
+      let ready = false;
       let settled = false;
+      const fail = (message: string, code: string | null = null) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(deadline);
+        reject(new ServerStartError(message, code));
+      };
+      const deadline = setTimeout(() => {
+        fail("The server exceeded its startup deadline");
+        child.kill("SIGKILL");
+      }, this.opts.startupTimeoutMs ?? 60_000);
+      child.on("error", (error: NodeJS.ErrnoException) => {
+        this.opts.log(`server: child process error (${error.code ?? "unknown"})`);
+        if (!ready) fail("The server child process failed", error.code ?? null);
+      });
       child.on("message", (raw) => {
         const parsed = DesktopServerMessage.safeParse(raw);
         if (!parsed.success) return;
         const message = parsed.data;
         if (message.type === "ready" && !settled) {
           settled = true;
+          clearTimeout(deadline);
+          ready = true;
           resolve(message);
-        } else if (message.type === "failed" && !settled) {
-          settled = true;
-          reject(new ServerStartError(message.message, message.code));
+        } else if (message.type === "failed" && !ready) {
+          fail(message.message, message.code);
         } else if (message.type === "update.command") {
           this.opts.onUpdateCommand(message.id, message.command);
         }
       });
-      child.once("exit", (code) => {
-        this.opts.log(`server: exited (code ${code})`);
+      child.once("close", (code, signal) => {
+        const reason = this.stopping
+          ? "expected"
+          : !ready
+            ? "startup"
+            : code === 0
+              ? "stopped"
+              : "unexpected";
+        this.opts.log(`server: exited (code ${code}, signal ${signal}, reason ${reason})`);
         this.child = undefined;
-        if (!settled) {
-          settled = true;
-          reject(new ServerStartError(`The server exited (code ${code}) before it started`, null));
-          return;
-        }
-        if (!this.stopping) this.opts.onUnexpectedExit(code);
+        this.opts.onExit?.({ code, signal, reason });
+        if (!ready) fail(`The server exited before it started (code ${code}, signal ${signal})`);
+        else if (!this.stopping) this.opts.onUnexpectedExit(code);
       });
     });
   }
 
   send(message: DesktopHostMessage): void {
-    if (this.child?.connected) this.child.send(message);
+    if (this.child?.connected) {
+      this.child.send(message, (error) => {
+        if (error) this.opts.log("server: could not send an IPC message");
+      });
+    }
   }
 
   /**
@@ -134,7 +172,7 @@ export class ServerProcess {
     if (!child) return;
     this.stopping = true;
     const grace = opts.graceMs ?? KILL_GRACE_MS;
-    const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
+    const exited = new Promise<void>((resolve) => child.once("close", () => resolve()));
     this.send({ type: "shutdown", stopRunner: opts.stopRunner });
     if (await settlesWithin(exited, opts.timeoutMs ?? 20_000)) return;
     this.opts.log("server: did not exit in time; stopping it");

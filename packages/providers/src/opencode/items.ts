@@ -24,6 +24,29 @@ export function userMessageEvent(threadId: string, turnId: string, input: UserIn
   };
 }
 
+/** A warning the session shows in a turn: a resume that started over, a skipped project config. */
+export interface SessionNotice {
+  code: string;
+  message: string;
+}
+
+/** A session notice as a warning item of the turn. */
+export function noticeEvent(threadId: string, turnId: string, notice: SessionNotice): AgentEvent {
+  return {
+    type: "item.completed",
+    threadId,
+    turnId,
+    item: {
+      id: `${notice.code}-${randomUUID()}`,
+      kind: "notice",
+      status: "completed",
+      level: "warning",
+      code: notice.code,
+      message: notice.message,
+    },
+  };
+}
+
 /** What is known about one tool call while it runs and when it ends. */
 export interface ToolState {
   id: string;

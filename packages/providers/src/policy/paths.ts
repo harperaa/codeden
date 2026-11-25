@@ -1,6 +1,9 @@
 import { realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { currentFolderLength } from "./current-folder";
+import { fromDevicePath } from "./device-paths";
+import type { ShellDialect } from "./shell-builder";
 
 export { isSecretPath } from "./secret-paths";
 
@@ -31,9 +34,17 @@ export interface PathContext {
   cdPath?: boolean;
   /**
    * True when the command sets `GIT_DIR` or `GIT_WORK_TREE`, which move the repository
-   * `git rev-parse --show-toplevel` prints: a `cd` there lands in a folder only known when it runs.
+   * `git rev-parse --show-toplevel` prints, or `PATH`, which may make `git` another program: a `cd`
+   * there lands in a folder only known when it runs.
    */
   gitEnv?: boolean;
+  /**
+   * True when the command may change what `pwd`, `Get-Location` or `git` print: it defines a
+   * function or an alias, or switches a builtin (`./current-folder`).
+   */
+  redefines?: boolean;
+  /** The shell the command runs in, for how it names where it is (`./current-folder`). */
+  shell?: ShellDialect;
   /** Extra writable roots (SessionOptions.additionalDirectories). */
   extraRoots?: readonly string[];
   /** The OS temp directories. Defaults to `osTempRoots()` for the running platform. */
@@ -132,11 +143,15 @@ function fromGitBash(value: string, temp: string | undefined): string {
 }
 
 /**
- * `target` with its quotes taken off and `~`, the home, temp and CodeDen home variables at its
- * start expanded; on Windows, a Git Bash path (`/c/x`, `/tmp/x`) as a Windows path.
+ * `target` with its quotes taken off and `~`, the home, temp and CodeDen home variables and where
+ * the shell is (`$(pwd)`, `$PWD`, `(Get-Location)`, `hereLength`) at its start expanded; on
+ * Windows, a device path (`\\?\C:\x`) or a Git Bash path (`/c/x`, `/tmp/x`) as a Windows path.
  */
 function expand(target: string, ctx: PathContext): string {
   let value = target.trim().replace(/^["']|["']$/g, "");
+  if (isWin(ctx)) value = fromDevicePath(value);
+  const here = hereLength(value, ctx);
+  if (here > 0) value = (ctx.dir ?? ctx.cwd) + value.slice(here);
   const home = homeOf(ctx);
   if (value === "~" || value.startsWith("~/") || value.startsWith("~\\")) {
     value = home + value.slice(1);
@@ -161,6 +176,17 @@ const UNKNOWN_ROOT = { posix: "/\0unknown", win32: "\\\\\0unknown\\folder" };
 export const isUnknownDir = (dir: string | undefined): boolean => dir === UNKNOWN_DIR;
 
 /**
+ * How long the name of where the shell is that `value` (its quotes taken off) starts with is
+ * (`./current-folder`: `$(pwd)/x`, `$PWD\x`, `(Get-Location)`), when that folder is known: not
+ * after a `cd` to an unknown folder, nor on a PowerShell drive that isn't the filesystem. 0
+ * otherwise.
+ */
+export function hereLength(value: string, ctx: PathContext): number {
+  if (isUnknownDir(ctx.dir) || ctx.psDrive) return 0;
+  return currentFolderLength(value, ctx);
+}
+
+/**
  * True when `value` (expanded) names the same place wherever the shell is: an absolute path, on
  * Windows with its drive (`\x` is on the current drive) or a UNC path.
  */
@@ -174,10 +200,13 @@ function rooted(value: string, ctx: PathContext): boolean {
  * no cmd variable (`%X%`, `%~dp0`), brace expansion, wildcard (`.?` and `..*` can match `..`) or
  * `~user`, and not `cd -` (or PowerShell's `cd +`), which go back (or forward) in a history the
  * classifier doesn't see. From an unknown folder, only a rooted path is known; with `CDPATH` set
- * (`cdPath`), only a rooted one or one starting with `.` or `..`.
+ * (`cdPath`), only a rooted one or one starting with `.` or `..`. Where the shell is
+ * (`cd "$(pwd)/apps/web"`, `Set-Location (Get-Location)`) is known when `hereLength` says so.
  */
 export function isKnownFolder(target: string, ctx: PathContext): boolean {
-  const raw = target.trim().replace(/^["']|["']$/g, "");
+  const written = target.trim().replace(/^["']|["']$/g, "");
+  const here = hereLength(written, ctx);
+  const raw = here > 0 ? `.${written.slice(here)}` : written;
   if (/^[+-]\d*$/.test(raw) || /^~[^\\/]/.test(raw)) return false;
   if (/[*?[`]|^\(|\{[^{}]*\}/.test(raw)) return false;
   const value = expand(target, ctx);
@@ -206,7 +235,18 @@ export function resolveAgainst(target: string, ctx: PathContext): string {
 /** True when `target` resolves inside `root` (or equals it). Case-insensitive on Windows. */
 export function isInside(target: string, root: string, ctx: PathContext): boolean {
   const rel = relative(root, target, ctx);
-  return rel === "" || (!rel.startsWith("..") && !pathApi(ctx).isAbsolute(rel));
+  return rel === "" || (!climbsOut(rel) && !pathApi(ctx).isAbsolute(rel));
+}
+
+/**
+ * True when a relative path leaves its folder: it starts with `..`, or with another name starting
+ * with `..` (`..x`, which a variable may have been glued onto: `..$X`). A name of three or more dots
+ * (Go's `./...`, a `'...'` in a one-liner) is a file or folder in it like any other (#663): on
+ * Windows too, which reads it as a name, or trims a last one to the folder itself.
+ */
+function climbsOut(rel: string): boolean {
+  const first = rel.split(/[\\/]/, 1)[0] ?? "";
+  return first.startsWith("..") && !/^\.{3,}$/.test(first);
 }
 
 function relative(root: string, target: string, ctx: PathContext): string {

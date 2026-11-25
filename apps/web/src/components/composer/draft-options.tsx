@@ -21,6 +21,7 @@ export function DraftOptions({
   choice,
   resolved,
   checks,
+  projectId,
   projectPath,
   onChange,
 }: {
@@ -29,6 +30,8 @@ export function DraftOptions({
   checks: ProjectCheck[];
   choice: DraftChoice;
   resolved: ResolvedDraft;
+  /** The project, whose own model lists the picker shows and refreshes. */
+  projectId: string;
   /** The project folder, named where the session runs in it. */
   projectPath: string;
   onChange: (next: DraftChoice) => void;
@@ -48,6 +51,7 @@ export function DraftOptions({
       {workspace}
       <ModelPicker
         providers={providers}
+        projectId={projectId}
         // The resolved choice, defaults included: what the first send starts.
         value={{ provider: provider.id, model: resolved.model, effort: resolved.effort }}
         shortcut

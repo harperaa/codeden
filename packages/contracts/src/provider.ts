@@ -84,6 +84,13 @@ export const ProviderCapabilities = z.object({
    */
   systemPrompt: z.boolean().optional(),
   /**
+   * The model list depends on the project: the provider reads config from the project's own
+   * folder (OpenCode's `opencode.json` with custom providers), so a project's list comes from the
+   * runner's `provider.models` with the project's folder, and sessions get the project's config
+   * through `SessionOptions.projectDir`. False or absent: `ProviderInfo.models` holds everywhere.
+   */
+  projectModels: z.boolean().optional(),
+  /**
    * The provider runs a project's own command files: `.claude/commands/<name>.md` is what
    * `/<name>` runs. False or absent: the agent can only read such a file and follow it.
    */
@@ -108,6 +115,17 @@ export const ModelInfo = z.object({
   contextWindow: z.int().positive().optional(),
 });
 export type ModelInfo = z.infer<typeof ModelInfo>;
+
+/**
+ * A provider's models for one project (`capabilities.projectModels`): its list with the
+ * project's own config included, and why some of that config was left out (a file that isn't
+ * valid JSON), in words for the user. Never holds the config itself, which may carry API keys.
+ */
+export const ProjectModels = z.object({
+  models: z.array(ModelInfo),
+  warnings: z.array(z.string()).default([]),
+});
+export type ProjectModels = z.infer<typeof ProjectModels>;
 
 /** Static description of a provider adapter as loaded by a runner. */
 export const ProviderInfo = z.object({
@@ -238,6 +256,12 @@ export const SessionOptions = z.object({
   role: Role,
   /** Working directory (worktree, repo root, or the orchestrator folder). */
   cwd: z.string().min(1),
+  /**
+   * The project's own folder (its main checkout), when the session belongs to a project and
+   * runs on the server's disk. A provider with `capabilities.projectModels` reads the project's
+   * config there that the worktree lacks (git doesn't track it), only from fixed file names.
+   */
+  projectDir: z.string().min(1).optional(),
   model: z.string().optional(),
   effort: ReasoningEffort.optional(),
   autonomy: AutonomyLevel,

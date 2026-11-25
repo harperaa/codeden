@@ -170,7 +170,7 @@ describe.skipIf(process.platform === "win32")("a runner's first session and mode
       "supported",
       opencode,
     );
-    const options = { noGuardPlugin: true };
+    const options = { noGuardPlugin: true, catalog: { pollMs: 10, settlePolls: 2 } };
     sessions.push(await new OpenCodeAdapter(options).openSession(sessionOptions()));
     expect(ran()).toEqual(["supported"]);
 

@@ -21,6 +21,7 @@ import {
   WALL_H,
   type WorkshopLayout,
 } from "../scene/layout";
+import { hasLaptop } from "./desk-props";
 import { at, type Kit, setColour } from "./kit";
 import type { FloorPalette } from "./palette";
 import { floorCanvas, signAtlas, slatsCanvas } from "./textures";
@@ -28,8 +29,8 @@ import { floorCanvas, signAtlas, slatsCanvas } from "./textures";
 /**
  * Floor mode's hall (#420): everything that stays put while the layout does. A concrete floor
  * with painted lanes and zone names, the back and left walls at full height and the front and
- * right ones as a low curb (a cutaway, no roof), the zone signs, desks, workbenches, laptops and
- * clipboards, the merge conveyors, the repair bay's fence, the PM's glass booth and the doors.
+ * right ones as a low curb (a cutaway, no roof), the zone signs, desks, workbenches and laptops,
+ * the merge conveyors, the repair bay's fence, the PM's glass booth and the doors.
  * Repeated parts are instanced. Rebuilt when the layout grows or the theme changes.
  */
 
@@ -155,12 +156,12 @@ export function buildWorkshop(layout: WorkshopLayout, p: FloorPalette, kit: Kit)
     new Mesh(kit.own(atlasPlanes(signRows)), kit.matte(null, { map: atlas, roughness: 0.6 })),
   );
 
-  // Desks and workbenches, with legs; laptops on the workbenches and review desks.
+  // Desks and workbenches, with legs, and a laptop on every desk where an agent works at a
+  // computer, seated or not; the props for each step come with the live props.
   const tops: BoxSpec[] = [];
   const topColours: Rgb[] = [];
   const legs: BoxSpec[] = [];
   const laptops: BoxSpec[] = [];
-  const paper: BoxSpec[] = [];
   const desks: LayoutSeat[] = [
     ...layout.seats.prep,
     ...layout.seats.bench,
@@ -183,7 +184,7 @@ export function buildWorkshop(layout: WorkshopLayout, p: FloorPalette, kit: Kit)
           h: DESK.h - 0.04,
           d: 0.04,
         });
-    if (seat.station === "bench" || seat.station === "review") {
+    if (hasLaptop(seat.station)) {
       const top = y + DESK.h;
       laptops.push({ x, y: top + 0.006, z: z - 0.02, w: 0.3, h: 0.012, d: 0.2 });
       // The lid stands at the far edge, its screen facing the figure behind the desk.
@@ -200,33 +201,12 @@ export function buildWorkshop(layout: WorkshopLayout, p: FloorPalette, kit: Kit)
         d: 0.008,
       });
     }
-    if (seat.station === "review") {
-      woodParts.push({
-        x: x + 0.3,
-        y: y + DESK.h + 0.006,
-        z: z + 0.04,
-        w: 0.13,
-        h: 0.012,
-        d: 0.18,
-        turn: -0.25,
-      });
-      paper.push({
-        x: x + 0.3,
-        y: y + DESK.h + 0.014,
-        z: z + 0.05,
-        w: 0.11,
-        h: 0.004,
-        d: 0.14,
-        turn: -0.25,
-      });
-    }
   }
   add(
     group,
     boxes(kit, unit, kit.matte(null, { roughness: 0.6 }), tops, topColours),
     boxes(kit, unit, steel, legs),
     boxes(kit, unit, kit.matte(p.laptop, { roughness: 0.4, metalness: 0.2 }), laptops),
-    boxes(kit, unit, kit.matte(p.paper), paper),
   );
 
   // The merge conveyors: one belt per row of seats, a slot per seat, the signal tower's pole.

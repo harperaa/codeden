@@ -52,6 +52,7 @@ export function ProjectSettings({ project }: { project: Project }) {
         <div className="rounded-lg border border-border px-1 py-0.5" data-testid="project-agent">
           <ModelPicker
             providers={providers}
+            projectId={project.id}
             align="end"
             placeholder="Settings default"
             value={

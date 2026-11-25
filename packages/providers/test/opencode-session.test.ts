@@ -105,7 +105,10 @@ class Reader {
 }
 
 const sessions: ProviderSession[] = [];
-const adapter = () => new OpenCodeAdapter({ executable: fakeOpenCode, noGuardPlugin: true });
+/** The fake's lists are complete at once: settle them in milliseconds, not the product's ~1.6 s. */
+const catalog = { pollMs: 10, settlePolls: 2 };
+const adapter = () =>
+  new OpenCodeAdapter({ executable: fakeOpenCode, noGuardPlugin: true, catalog });
 
 async function open(extra: Partial<SessionOptions> = {}, a = adapter()) {
   const session = await a.openSession(options(extra));

@@ -45,6 +45,26 @@ export function SetupNotice({
   );
 }
 
+/**
+ * What of the project's own provider config was left out of this list (a file that isn't valid
+ * JSON), so a model it defines may be missing (#643).
+ */
+export function ConfigNotice({ warnings }: { warnings: readonly string[] }) {
+  return (
+    <div
+      className="mb-1.5 flex flex-col items-start gap-1 rounded-md border border-status-waiting/25 bg-status-waiting/[0.06] px-2.5 py-2 text-xs"
+      data-picker-notice
+    >
+      {warnings.map((warning) => (
+        <p key={warning} className="flex items-start gap-1.5 text-foreground">
+          <TriangleAlert className="mt-px size-3.5 shrink-0 text-status-waiting" aria-hidden />
+          {warning}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 /** A small button inside a row; clicking it never picks the row. */
 function RowAction({
   label,

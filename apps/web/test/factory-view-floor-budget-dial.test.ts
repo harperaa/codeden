@@ -1,8 +1,9 @@
 import { BoxGeometry, CircleGeometry, Group, Mesh, type Object3D, Vector3 } from "three";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { occupiedSeats } from "@/components/factory-view/floor/desk-props";
 import { Kit } from "@/components/factory-view/floor/kit";
 import { readPalette } from "@/components/factory-view/floor/palette";
-import { buildProps, occupiedSeats } from "@/components/factory-view/floor/props";
+import { buildProps } from "@/components/factory-view/floor/props";
 import { buildWorkshop } from "@/components/factory-view/floor/workshop";
 import { type WorkshopLayout, workshopLayout } from "@/components/factory-view/scene/layout";
 import type { Scene } from "@/components/factory-view/scene/scene-model";

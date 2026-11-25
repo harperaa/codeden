@@ -8,22 +8,23 @@ import {
   PlaneGeometry,
 } from "three";
 import type { Rgb } from "@/lib/oklch";
-import type { LayoutSeat, WorkshopLayout } from "../scene/layout";
+import type { WorkshopLayout } from "../scene/layout";
 import type { BayCrate } from "../scene/repair-bay";
 import type { Scene } from "../scene/scene-model";
-import { stationOf } from "../scene/stations";
-import { at, colour, type Kit } from "./kit";
+import { buildDeskProps } from "./desk-meshes";
+import { type SeatUse, seatKey } from "./desk-props";
+import { colour, type Kit } from "./kit";
 import type { FloorPalette } from "./palette";
-import { boardCanvas, closedCanvas, dialCanvas, displayCanvas, whiteboardCanvas } from "./textures";
+import { boardCanvas, closedCanvas, dialCanvas, displayCanvas } from "./textures";
 import { BELT_TOP, type BoxSpec, boxes } from "./workshop";
 
 /**
  * Floor mode's live props (#420): what follows the factory's state rather than the layout. The
  * tickets on intake's pallet (at most 8 drawn) and the sign with the full count, the signal
  * tower (amber while CI runs), a crate on the belt for each agent merging, the status board over
- * the dock door (merges today, agents working, items waiting on you), the repair bay's crates (at most 3, by kind), the budget dial (hidden
- * without a budget) and each prep desk's prop: a bug jar for reproducing, a whiteboard for
- * analyzing. Rebuilt when any of it changes.
+ * the dock door (merges today, agents working, items waiting on you), the repair bay's crates
+ * (at most 3, by kind), the budget dial (hidden without a budget) and, on each occupied desk, the
+ * prop for its agent's step (`desk-props.ts`). Rebuilt when any of it changes.
  */
 
 /** What the props show, to tell whether they need rebuilding. */
@@ -31,7 +32,7 @@ export function propsKey(
   scene: Scene,
   layout: WorkshopLayout,
   p: FloorPalette,
-  occupied: ReadonlyMap<string, string>,
+  occupied: ReadonlyMap<string, SeatUse>,
 ): string {
   return JSON.stringify([
     scene.tickets.ids.length,
@@ -96,7 +97,7 @@ export function buildProps(
   p: FloorPalette,
   kit: Kit,
   unit: BoxGeometry,
-  occupied: ReadonlyMap<string, string>,
+  occupied: ReadonlyMap<string, SeatUse>,
 ): Group {
   const group = new Group();
   const add = (...meshes: (Mesh | null)[]) => {
@@ -226,89 +227,7 @@ export function buildProps(
     group.add(dial);
   }
 
-  // Prep desks: a bug jar for reproducing, a whiteboard for analyzing (unseated desks alternate).
-  const jars: BoxSpec[] = [];
-  const boards: LayoutSeat[] = [];
-  layout.seats.prep.forEach((seat, i) => {
-    if (!seat.desk) return;
-    const step = occupied.get(seatKey(seat));
-    const jar = step ? step === "reproducing" : i % 2 === 0;
-    if (jar)
-      jars.push({ x: seat.desk.x + 0.25, y: 0.26 + 0.06, z: seat.desk.z, w: 0.1, h: 0.12, d: 0.1 });
-    else boards.push(seat);
-  });
-  const jarGeo = kit.own(new CylinderGeometry(0.05, 0.05, 0.12, 16));
-  const glass = kit.own(
-    new MeshStandardMaterial({
-      color: colour(p.glass),
-      transparent: true,
-      opacity: 0.45,
-      roughness: 0.1,
-    }),
-  );
-  const jarMesh = kit.instanced(
-    jarGeo,
-    glass,
-    jars.map((j) => at(j.x, j.y, j.z)),
-    undefined,
-    { cast: false },
-  );
-  add(jarMesh);
-  add(
-    boxes(
-      kit,
-      unit,
-      kit.matte(p.ink),
-      jars.map((j) => ({ x: j.x, y: j.y - 0.02, z: j.z, w: 0.03, h: 0.02, d: 0.04 })),
-    ),
-    boxes(
-      kit,
-      unit,
-      kit.matte(p.steel),
-      jars.map((j) => ({ x: j.x, y: j.y + 0.065, z: j.z, w: 0.105, h: 0.015, d: 0.105 })),
-    ),
-  );
-  if (boards.length > 0) {
-    const face = kit.matte(null, { map: kit.canvasTexture(whiteboardCanvas(p)), roughness: 0.4 });
-    const boardGeo = kit.own(new PlaneGeometry(0.3, 0.19));
-    const boardMesh = kit.instanced(
-      boardGeo,
-      face,
-      boards.map((s) => at((s.desk?.x ?? 0) + 0.2, 0.26 + 0.13, (s.desk?.z ?? 0) + 0.05, 0.35)),
-      undefined,
-      { cast: true },
-    );
-    add(
-      boardMesh,
-      boxes(
-        kit,
-        unit,
-        kit.matte(p.steel),
-        boards.map((s) => ({
-          x: (s.desk?.x ?? 0) + 0.2,
-          y: 0.26 + 0.13,
-          z: (s.desk?.z ?? 0) + 0.045,
-          w: 0.32,
-          h: 0.21,
-          d: 0.008,
-          turn: 0.35,
-        })),
-      ),
-    );
-  }
+  // Each occupied desk's prop for its agent's step (the laptops are part of the hall).
+  group.add(buildDeskProps(layout, p, kit, unit, occupied));
   return group;
-}
-
-/** A seat's key, matching the occupied map. */
-export const seatKey = (seat: LayoutSeat) => `${seat.station}:${seat.tile.c},${seat.tile.r}`;
-
-/** Which seats are taken, and the step of whoever sits there. */
-export function occupiedSeats(scene: Scene): Map<string, string> {
-  const out = new Map<string, string>();
-  for (const a of scene.agents) {
-    const seat = scene.seating.seats.get(a.key);
-    if (!seat || seat.station !== stationOf(a)) continue;
-    out.set(`${seat.station}:${seat.tile.c},${seat.tile.r}`, a.step ?? a.role);
-  }
-  return out;
 }

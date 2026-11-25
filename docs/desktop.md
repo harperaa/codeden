@@ -98,6 +98,8 @@ The app's server and runner keep running between windows, so they may have start
   | Actual size (100%) | Ctrl+0, Ctrl+Num0 | Cmd+0, Cmd+Num0 |
 
 - The window remembers its size, position and zoom (also after a reload or a restart).
+- **If the window can't load.** A page that fails to load is tried again once the server answers, and a window whose page crashed reloads itself. If that doesn't help (or the page crashes twice within 30 seconds), the window shows a short recovery page instead of a blank screen: choose **Help > Retry Loading CodeDen** (on Windows and Linux, press Alt to show the menu bar). Retrying never replaces the server the app started, and never starts a second one beside a server that is still running. If the app's server stops unexpectedly, a dialog offers **Restart** or **Quit**.
+- **Help > Export Diagnostics** saves a small JSON report of recent process exits (the app's server, the window's page and the app's helper processes) and why the app quit, to attach to a bug report. It holds only fixed reasons, exit codes and signal names: no logs, paths, addresses, tokens or settings. The app keeps the last 100 of these in `~/.codeden/logs/desktop-diagnostics.json`.
 
 ### Links
 
@@ -149,6 +151,7 @@ Notes:
 | Session browser cookies and storage (native views) | In memory only, per session; gone when the session's browser closes or the app quits (after the hand-off) |
 | Downloads from the session browser | Your Downloads folder |
 | App logs | `~/.codeharden/logs/desktop.log` and `desktop-server.log` (Help > Show Logs) |
+| Exit diagnostics | `~/.codeharden/logs/desktop-diagnostics.json` (Help > Export Diagnostics saves a copy) |
 | Claude Code support (installed on first use) | `~/.codeharden/deps` |
 | The app itself | Windows: `%LOCALAPPDATA%\Programs\CodeHarden`; macOS: `/Applications/CodeHarden.app`; Linux: wherever you keep the AppImage, or `/opt/CodeHarden` for the `.deb` |
 | Downloaded updates | Windows: `%LOCALAPPDATA%\codeharden-updater`; macOS: `~/Library/Caches/codeharden-updater`; Linux: `~/.cache/codeharden-updater` |

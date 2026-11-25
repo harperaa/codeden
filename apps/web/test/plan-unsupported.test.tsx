@@ -81,6 +81,7 @@ describe("the New session draft's Plan across providers (#531)", () => {
         checks={[]}
         choice={choice}
         resolved={resolveDraftChoice(choice, defaults)}
+        projectId="p1"
         projectPath="/repo"
         onChange={onChange}
       />,

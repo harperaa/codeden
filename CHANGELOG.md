@@ -6,6 +6,24 @@ All notable changes to CodeDen are documented here. The format follows [Keep a C
 
 The notes for the next release are in [`changes/`](changes/README.md), one file per change. The release moves them into a version section here.
 
+## [0.7.10] - 2026-11-25
+
+### Changed
+
+- **Each desk on the Floor shows what its agent is doing.** Every desk where an agent works (prep, build, review and the PM's) now has a laptop, and an occupied desk gets a prop for its step: a glass jar with a red bug and a magnifier while reproducing a bug, the whiteboard and sticky notes while analyzing a feature, a toolbox at the bench (with a wrench for a bug fix or a blueprint roll for a feature) and a clipboard with a red pen while reviewing. Empty desks keep only their laptop, and the props change as soon as an agent moves on to its next step.
+
+### Fixed
+
+- **OpenCode uses the project's own config.** A provider defined in a project's `opencode.json`, `opencode.jsonc` or `.opencode/opencode.json` that git doesn't track (such as a custom router) now shows up in the model picker for that project, in New session, the session composer and the project's default model, and its sessions can run it instead of failing with "Model unavailable". CodeDen lists OpenCode's models per project and gives each session the project's config from its main checkout. Your inline config and CodeDen's own settings stay on top, so CodeDen's permission rules, its plugin and its MCP server always win, and a project config never brings in plugins or permission rules. A config file that isn't valid JSON is left out with a warning in the model picker and in the session. Only the config file is read from `.opencode/`: its agents, commands and plugins are not.
+- **OpenCode's model list is waited for, not guessed at.** OpenCode 2.4.x loads its providers and models a second or more after its server prints its start-up URL, so CodeDen's model probe could read an empty list and leave the picker with only **Default** ("OpenCode listed no models"), hiding your configured models and their reasoning-effort levels. The probe now polls OpenCode's provider and model lists until they settle, within its existing 20-second budget. The utility model's cheap-model lookup waits the same way, so session titles, follow-up suggestions and summaries keep using a cheap model instead of silently falling back to the default one.
+- **Full no longer asks for ordinary commands in a worktree.** Commands that name where the shell is (`cd "$(pwd)/apps/web"`, `Set-Location (Get-Location)`) run without asking again at Full and Auto, and no level asks any more for a name of three or more dots in the worktree (`go test ./...`, a `'...'` in a one-liner), which counted as CodeDen's own home because session worktrees live there.
+- **Desktop crash recovery.** CodeDen retries failed window loads and reloads the window after a renderer crash. If recovery fails, use **Help > Retry Loading CodeDen**. **Help > Export Diagnostics** saves a JSON report with recent process exits and quit reasons. The web app offers a reload button after an unexpected error.
+
+### Security
+
+- **Paths built from where the shell is resolve to that folder.** Writing beside the worktree that way (`rm -rf "$(pwd)/../x"`, `"$PWD../x"`) now asks, and so does a `cd` to the folder `pwd`, `Get-Location` or `git rev-parse --show-toplevel` prints once the command line redefines them or changes `PATH`.
+- **Windows device paths and empty PowerShell values in a path now ask.** `\\?\C:\…`, `\\.\C:\…` and `\??\C:\…` name the same file as `C:\…`, so CodeDen's own home and credentials ask at every level in those forms too. A path that starts with or holds `$null`, `$true`, `$false` or `$_`, which a shell may expand to nothing, asks at Auto and Full. Alone (`> $null`, `Remove-Item $_`), they still run freely.
+
 ## [0.7.9] - 2026-11-23
 
 ### Security

@@ -73,6 +73,11 @@ const MODELS = [
   { id: "no-tools", providerID: "openai", name: "No tools", capabilities: { tools: false } },
   { id: "openai/gpt-oss-20b", providerID: "lmstudio", name: "GPT OSS 20B" },
 ];
+// Custom providers from the inline config (`provider.<id>.models.<id>`), as OpenCode lists them.
+const CONFIG_PROVIDERS = Object.entries(config.provider ?? {});
+const CONFIG_MODELS = CONFIG_PROVIDERS.flatMap(([providerID, p]) =>
+  Object.entries(p.models ?? {}).map(([id, m]) => ({ id, providerID, name: m.name ?? id, capabilities: { tools: true } })),
+);
 
 // `/api/command` and `/api/skill`. Like OpenCode, a location's lists load lazily: the first
 // request gets the built-ins only, then `command.updated` and `skill.updated` announce the rest.
@@ -304,12 +309,13 @@ const server = createServer((req, res) => {
     }
     if (path === "/api/info") return send(res, 200, { version: "2.2.7", pid: process.pid });
     if (path === "/api/provider") {
-      return send(res, 200, { data: mode === "no-providers" ? [] : [{ id: "anthropic", name: "Anthropic" }, { id: "openai", name: "OpenAI" }, { id: "lmstudio", name: "LM Studio" }] });
+      const own = CONFIG_PROVIDERS.map(([id, p]) => ({ id, name: p.name ?? id }));
+      return send(res, 200, { data: mode === "no-providers" ? own : [{ id: "anthropic", name: "Anthropic" }, { id: "openai", name: "OpenAI" }, { id: "lmstudio", name: "LM Studio" }, ...own] });
     }
     if (path === "/api/credential") {
       return send(res, 200, { data: mode === "no-providers" ? [] : [{ id: "c1", integrationID: "anthropic", active: true }, { id: "c2", integrationID: "openai", active: false }] });
     }
-    if (path === "/api/model") return mode === "models-error" ? send(res, 500, { message: "models down" }) : send(res, 200, { data: mode === "no-providers" ? [] : MODELS });
+    if (path === "/api/model") return mode === "models-error" ? send(res, 500, { message: "models down" }) : send(res, 200, { data: [...(mode === "no-providers" ? [] : MODELS), ...CONFIG_MODELS] });
     if (path === "/api/model/default") return send(res, 200, { data: mode === "no-providers" ? null : MODELS[0] });
     if (path === "/api/mcp") return send(res, 200, { data: [{ name: "playwright", status: "connected" }, ...Object.keys(config.mcp?.servers ?? {}).map((name) => ({ name, status: "connected" }))] });
     if (path === "/api/command" || path === "/api/skill") {

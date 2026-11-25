@@ -48,15 +48,24 @@ try {
     mcpUpstreamUrl: values["mcp-upstream"],
     sweepDescendants: true,
     log,
-    onShutdown: () => process.exit(0),
+    onShutdown: (exitCode) => process.exit(exitCode),
   });
-  const stop = () => {
-    // Backstop (#588): a runner told to stop never outlives the signal, whatever hangs.
-    setTimeout(() => process.exit(1), 60_000).unref();
-    void runner.close().then(() => process.exit(0));
-  };
+  let stopping = false;
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"] as const) {
-    process.on(signal, stop);
+    process.on(signal, () => {
+      if (stopping) return;
+      stopping = true;
+      log(`runner: received ${signal}`);
+      // Backstop (#588): exit even if shutdown hangs.
+      setTimeout(() => process.exit(1), 60_000).unref();
+      void runner.close().then(
+        () => process.exit(0),
+        (error: unknown) => {
+          log(`runner shutdown failed: ${String(error)}`);
+          process.exit(1);
+        },
+      );
+    });
   }
 } catch (error) {
   log(`failed to start: ${error instanceof Error ? error.message : String(error)}`);

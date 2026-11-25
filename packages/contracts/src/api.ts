@@ -17,7 +17,7 @@ import { ItemRecord, Session, SessionStatus, Thread, Turn } from "./entities/ses
 import { ProjectExecutionBackend } from "./execution";
 import { UserInput } from "./input";
 import { FollowupsItem } from "./items";
-import { BrokenExecutable, ProviderInfo, RuntimeResponse } from "./provider";
+import { BrokenExecutable, ProjectModels, ProviderInfo, RuntimeResponse } from "./provider";
 import { ConflictDecision, StartedBy, StartWorkResult, WorkKey } from "./work";
 import { SetupStep } from "./workbench";
 import { ClientSubscribe, ClientToServerMessage, ServerToClientMessage } from "./ws";
@@ -697,6 +697,25 @@ export const RefreshModelsResponse = z.object({
   providers: z.array(ProviderInfo),
 });
 export type RefreshModelsResponse = z.infer<typeof RefreshModelsResponse>;
+
+/** `GET /api/providers/:id/models?projectId=&refresh=` query. */
+export const ProjectModelsQuery = z.object({
+  projectId: z.string().min(1),
+  /** `1`/`true`: ask the provider again instead of answering from the runner's list. */
+  refresh: z.enum(["1", "true"]).optional(),
+});
+export type ProjectModelsQuery = z.infer<typeof ProjectModelsQuery>;
+
+/**
+ * `GET /api/providers/:id/models?projectId=` response: the provider's models for that project
+ * (`capabilities.projectModels`: with the project's own config), or its usual list for a
+ * provider whose models don't depend on the project.
+ */
+export const ProjectModelsResponse = ProjectModels.extend({
+  providerId: z.string(),
+  projectId: z.string(),
+});
+export type ProjectModelsResponse = z.infer<typeof ProjectModelsResponse>;
 
 /** `POST /api/setup/login/:tool` response: what to run in a terminal. */
 export const LoginCommandResponse = z.object({

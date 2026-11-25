@@ -19,6 +19,8 @@ import {
   ListSessionsQuery,
   LoginCommandResponse,
   LoginToolId,
+  ProjectModelsQuery,
+  ProjectModelsResponse,
   REVIEW_FOCUS_MAX,
   RefreshModelsResponse,
   ReorderProjectsRequest,
@@ -179,6 +181,18 @@ describe("api schemas", () => {
     });
     expect(res.providers[0]?.models[0]).toMatchObject({ resolvedId: "claude-fable-5-2" });
     expect(RefreshModelsResponse.safeParse({}).success).toBe(false);
+  });
+
+  it("round-trips a project's model list and its query", () => {
+    const res = roundTrip(ProjectModelsResponse, {
+      providerId: "opencode",
+      projectId: "p1",
+      models: [{ id: "9router/Worker", label: "Worker", description: "9Router" }],
+      warnings: ["Skipped .opencode/opencode.json: not valid JSON"],
+    });
+    expect(res.models[0]?.id).toBe("9router/Worker");
+    expect(roundTrip(ProjectModelsQuery, { projectId: "p1", refresh: "1" }).refresh).toBe("1");
+    expect(ProjectModelsQuery.safeParse({ projectId: "" }).success).toBe(false);
   });
 
   it("round-trips Cursor's setup check and sign-in command", () => {

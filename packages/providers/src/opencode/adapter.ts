@@ -16,6 +16,8 @@ import { fallbackOpenCodeModels, modelEfforts } from "./models";
 import { OpenCodeUtilityModel } from "./one-shot";
 import { guardPluginDir } from "./plugin";
 import { type OpenCodeProbe, probeOpenCode } from "./probe";
+import { OpenCodeProjectModels } from "./project-models";
+import type { CatalogPolling } from "./ready";
 import { OpenCodeSession } from "./session";
 
 export const OPENCODE_PROVIDER_ID = "opencode";
@@ -45,6 +47,7 @@ const capabilities: ProviderCapabilities = {
   liveAutonomy: true,
   readOnly: true,
   compact: true,
+  projectModels: true,
 };
 
 export interface OpenCodeAdapterOptions {
@@ -53,6 +56,11 @@ export interface OpenCodeAdapterOptions {
   probeTimeoutMs?: number;
   /** Skip the env-guard plugin (tests with a fake server). */
   noGuardPlugin?: boolean;
+  /**
+   * How the provider and model lists are polled until they settle (`readProviderCatalog`), for
+   * probes and the utility model; tests with a fake server shorten the settle window.
+   */
+  catalog?: CatalogPolling;
 }
 
 /** OpenCode through a private `opencode serve` per session, over its v2 HTTP API (§7.2). */
@@ -63,6 +71,12 @@ export class OpenCodeAdapter implements ProviderAdapter {
   private listed = false;
   private readonly freshness = new ModelFreshness();
   private probing: Promise<OpenCodeProbe> | undefined;
+  /** Lists made with a project's own config (#643), per project. */
+  private readonly projectLists = new OpenCodeProjectModels({
+    probe: async (exe, projectConfig) =>
+      (await probeOpenCode(exe, this.probeOptions(projectConfig))).models,
+    global: () => this.catalog.list(),
+  });
 
   constructor(private readonly options: OpenCodeAdapterOptions = {}) {}
 
@@ -121,12 +135,23 @@ export class OpenCodeAdapter implements ProviderAdapter {
     await this.probe(exe).catch(() => undefined);
   }
 
+  /**
+   * A project's models: OpenCode's list with the project's own `opencode.json` (or `.opencode/`
+   * config) layered in, which neither the temp-folder probe nor a worktree sees (#643).
+   */
+  async projectModels(projectDir: string, opts: { refresh?: boolean } = {}) {
+    await this.located();
+    return this.projectLists.list(this.executable(), projectDir, opts);
+  }
+
   async openSession(opts: SessionOptions): Promise<ProviderSession> {
     await this.located();
     const executable = this.executable();
     if (!executable) throw new Error("OpenCode is not installed (no `opencode` on PATH)");
+    // The project's own list when one was made: it holds the models its config adds.
+    const listFor = () => this.projectLists.cached(opts.projectDir) ?? this.catalog.list();
     const efforts = (model: string | undefined) => {
-      const list = this.catalog.list();
+      const list = listFor();
       // A model OpenCode doesn't list (a custom id) has no known variants, and OpenCode fails
       // the turn on a variant the model lacks, so none is sent; before discovery, efforts pass.
       return (
@@ -139,7 +164,7 @@ export class OpenCodeAdapter implements ProviderAdapter {
       ...(this.options.noGuardPlugin ? {} : { pluginDir: guardPluginDir() }),
       modelEfforts: efforts,
       contextWindow: (model) => {
-        const list = this.catalog.list();
+        const list = listFor();
         const id = model ?? list.find((m) => m.isDefault)?.id;
         return list.find((m) => m.id === id)?.contextWindow;
       },
@@ -154,12 +179,20 @@ export class OpenCodeAdapter implements ProviderAdapter {
   }
 
   utilityModel(): UtilityModel {
-    return new OpenCodeUtilityModel(() => this.executable());
+    return new OpenCodeUtilityModel(() => this.executable(), this.options.catalog);
+  }
+
+  private probeOptions(projectConfig?: Record<string, unknown>) {
+    return {
+      timeoutMs: this.options.probeTimeoutMs,
+      ...(projectConfig ? { projectConfig } : {}),
+      ...(this.options.catalog ? { catalog: this.options.catalog } : {}),
+    };
   }
 
   /** One probe at a time; its models replace the catalog. Rejects on failure. */
   private probe(exe: ResolvedCommand): Promise<OpenCodeProbe> {
-    this.probing ??= probeOpenCode(exe, { timeoutMs: this.options.probeTimeoutMs })
+    this.probing ??= probeOpenCode(exe, this.probeOptions())
       .then(
         (result) => {
           if (result.models.length) this.setModels(result.models, exe);
@@ -182,6 +215,8 @@ export class OpenCodeAdapter implements ProviderAdapter {
     this.listed = true;
     this.freshness.confirm(executableFingerprint(from));
     this.catalog.set(models);
+    // A sign-in or a new provider changes every project's list too.
+    this.projectLists.clear();
   }
 
   /** Keep the last real list; without one, say why only the configured default is offered. */

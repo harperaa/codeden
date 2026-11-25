@@ -5,7 +5,8 @@ import { type OneShotRequest, oneShotSignal, type UtilityModel } from "../utilit
 import type { OpenCodeClient } from "./client";
 import { modelRef } from "./config";
 import { cheapUtilityModel } from "./models";
-import type { OcModel, OcModelRef } from "./protocol";
+import type { OcModelRef } from "./protocol";
+import { type CatalogPolling, readProviderCatalog } from "./ready";
 import { OpenCodeServer } from "./server";
 
 /** Empty string = no model chosen in Settings: a cheap one is picked (`cheapUtilityModel`). */
@@ -22,7 +23,11 @@ export class OpenCodeUtilityModel implements UtilityModel {
   readonly providerId = "opencode";
   readonly defaultModel = OPENCODE_UTILITY_MODEL;
 
-  constructor(private readonly resolveExecutable: () => ResolvedCommand | undefined) {}
+  constructor(
+    private readonly resolveExecutable: () => ResolvedCommand | undefined,
+    /** How the model lists are polled for the cheap model (tests shorten it). */
+    private readonly catalog: CatalogPolling = {},
+  ) {}
 
   async runOneShot(request: OneShotRequest): Promise<string> {
     const exe = this.resolveExecutable();
@@ -33,7 +38,7 @@ export class OpenCodeUtilityModel implements UtilityModel {
       server = await OpenCodeServer.start(exe, { cwd: tmpdir(), signal });
       const model = explicitModel(request.model)
         ? modelRef(request.model)
-        : await cheapModel(server.client, signal);
+        : await cheapModel(server.client, signal, this.catalog);
       const prompt = request.system
         ? `${request.system.trim()}\n\n---\n\n${request.prompt}`
         : request.prompt;
@@ -59,13 +64,13 @@ export class OpenCodeUtilityModel implements UtilityModel {
 async function cheapModel(
   client: OpenCodeClient,
   signal: AbortSignal,
+  polling: CatalogPolling,
 ): Promise<OcModelRef | undefined> {
   try {
-    const [byDefault, list] = await Promise.all([
-      client.get<{ data?: OcModel | null }>("/api/model/default", signal),
-      client.get<{ data?: OcModel[] }>("/api/model", signal),
-    ]);
-    return cheapUtilityModel(list?.data ?? [], byDefault?.data);
+    // The lists load asynchronously after the server prints its URL (#651): read them the
+    // same settling way the picker probe does, so utility jobs keep their cheap model.
+    const catalog = await readProviderCatalog(client, signal, polling);
+    return cheapUtilityModel(catalog.models, catalog.defaultModel);
   } catch (error) {
     if (signal.aborted) throw error;
     return undefined;

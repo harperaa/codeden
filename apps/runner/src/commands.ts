@@ -102,6 +102,17 @@ export async function executeCommand(core: RunnerCore, command: RunnerCommand): 
       await refreshed;
       return { statuses, providers: registry.info() };
     }
+    case "provider.models": {
+      const adapter = registry.get(command.providerId);
+      if (!adapter) {
+        throw new CommandError("unknown_provider", `No provider "${command.providerId}"`);
+      }
+      // Only a provider whose models depend on the project reads its folder.
+      if (!adapter.capabilities().projectModels || !adapter.projectModels) {
+        return { models: adapter.models(), warnings: [] };
+      }
+      return adapter.projectModels(command.projectDir, { refresh: command.refresh ?? false });
+    }
 
     case "provider.oneShot": {
       const adapter = registry.get(command.providerId);

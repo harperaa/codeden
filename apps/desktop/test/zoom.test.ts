@@ -140,6 +140,8 @@ describe("zoom menu items", () => {
     checkForUpdates: () => {},
     openDocs: () => {},
     openLogs: () => {},
+    exportDiagnostics: () => {},
+    retryLoading: () => {},
     quit: () => {},
     zoom: (command: ZoomCommand) => calls.push(command),
   });

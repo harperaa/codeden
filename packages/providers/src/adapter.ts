@@ -3,6 +3,7 @@ import type {
   AutonomyLevel,
   ErrorKind,
   ModelInfo,
+  ProjectModels,
   ProviderCapabilities,
   ProviderHistoryEntry,
   ProviderHistoryHideResult,
@@ -36,6 +37,12 @@ export interface ProviderAdapter {
    * an honest fallback.
    */
   refreshModels?(opts?: RefreshModelsOptions): Promise<void>;
+  /**
+   * The models for one project, with the project's own config (in `projectDir`, its main
+   * checkout) included, kept per project; `refresh` asks the provider again. Present exactly
+   * when `capabilities().projectModels`. Must not throw: problems come back as `warnings`.
+   */
+  projectModels?(projectDir: string, opts?: { refresh?: boolean }): Promise<ProjectModels>;
   /**
    * Call `listener` whenever `models()` changes (discovery, a session reporting its models).
    * Optional. Returns the unsubscribe function.

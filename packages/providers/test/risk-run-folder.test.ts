@@ -270,6 +270,11 @@ describe("commands run outside the worktree (#614)", () => {
       `cd ${broken} && cd $(git rev-parse --show-toplevel) && make clean`,
       "cd $X && cd $(git rev-parse --show-toplevel) && make clean",
       "export GIT_WORK_TREE=/x; cd $(git rev-parse --show-toplevel) && make clean",
+      // `git` may then print any folder (#663).
+      "git() { echo /other; }; cd $(git rev-parse --show-toplevel) && make clean",
+      "function git { echo /other; }; cd $(git rev-parse --show-toplevel) && make clean",
+      "PATH=/tmp/bin:$PATH; cd $(git rev-parse --show-toplevel) && make clean",
+      "alias git=/tmp/bin/git\ncd $(git rev-parse --show-toplevel) && make clean",
     ]) {
       expect(action(cmd, ctx), cmd).toBe("outside_worktree");
     }

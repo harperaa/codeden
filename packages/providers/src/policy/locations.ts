@@ -1,5 +1,6 @@
 import { gitTopLevel } from "../util/git-head";
 import { binName, CD, namedArg, unwrap } from "./command-words";
+import { namesCurrentFolder } from "./current-folder";
 import {
   isKnownFolder,
   isUnknownDir,
@@ -106,9 +107,12 @@ function afterPop<T extends PathContext>(bin: string, words: string[], ctx: T): 
 
 /**
  * The context with its location moved to `target`: a folder, an item on a PowerShell drive, or a
- * folder only known when the command runs (`cd $X`, `cd -`: `UNKNOWN_DIR`, #614).
+ * folder only known when the command runs (`cd $X`, `cd -`: `UNKNOWN_DIR`, #614). Where the shell
+ * is (`cd "$(pwd)/apps/web"`, `./current-folder`) is a folder like any other; on a PowerShell
+ * drive that isn't the filesystem (`Set-Location (Get-Location)` in `HKCU:`), the shell stays on it.
  */
 export function moveTo<T extends PathContext>(given: string, ctx: T): T {
+  if (ctx.psDrive && namesCurrentFolder(given.trim().replace(/^["']/, ""))) return ctx;
   const target = withTopLevel(given, ctx);
   const provider = providerPath(target, ctx);
   if (provider && provider.path === undefined) return { ...ctx, psDrive: provider.drive };
@@ -126,12 +130,13 @@ const TOP_LEVEL =
  * `target` with the repository's top folder in place of a `git rev-parse --show-toplevel` it
  * starts with (`cd "$(git rev-parse --show-toplevel)/apps/web"`), found on disk from where the
  * shell is (`gitTopLevel`). Left as it is (a folder only known when it runs) when the shell is
- * somewhere unknown, the command sets `GIT_DIR` or `GIT_WORK_TREE` (`gitEnv`), the paths are
- * another platform's, or no repository holds the folder.
+ * somewhere unknown, the command sets `GIT_DIR`, `GIT_WORK_TREE` or `PATH` (`gitEnv`) or may
+ * redefine `git` (`redefines`: `git() { echo /other; }`), the paths are another platform's, or no
+ * repository holds the folder.
  */
 function withTopLevel(target: string, ctx: PathContext): string {
   const match = TOP_LEVEL.exec(target.trim());
-  if (!match || ctx.gitEnv || isUnknownDir(ctx.dir) || ctx.psDrive) return target;
+  if (!match || ctx.gitEnv || ctx.redefines || isUnknownDir(ctx.dir) || ctx.psDrive) return target;
   if ((ctx.platform ?? process.platform) !== process.platform) return target;
   const top = gitTopLevel(resolveAgainst(".", ctx));
   return top === undefined ? target : `${match[1]}${top}${target.trim().slice(match[0].length)}`;

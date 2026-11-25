@@ -359,7 +359,8 @@ export class SessionLauncher {
    */
   sessionOptions(session: Session, mcpToken: string | null = null): SessionOptions {
     const project = this.projectOf(session);
-    const proxyUrl = runnerForSession(this.deps, session.id).mcpProxyUrl();
+    const runner = runnerForSession(this.deps, session.id);
+    const proxyUrl = runner.mcpProxyUrl();
     const mcpServers: McpServerConfig[] = [];
     if (proxyUrl && mcpToken) {
       mcpServers.push({
@@ -375,6 +376,9 @@ export class SessionLauncher {
       sessionId: session.id,
       role: session.role,
       cwd: session.cwd,
+      // The project's own folder, for config its worktree lacks (#643); a sandbox's runner works
+      // in its own clone and can't see it.
+      ...(project && !clonesWorkspaces(runner) ? { projectDir: project.path } : {}),
       model: session.model ?? undefined,
       effort: session.effort ?? undefined,
       autonomy: session.autonomy,

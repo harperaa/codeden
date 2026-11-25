@@ -5,6 +5,9 @@ import { agentEnv } from "../util/agent-env";
 import { killTree, type ResolvedCommand, spawnResolved } from "../util/exec";
 import { OpenCodeClient } from "./client";
 import { HIDDEN_ENV_VARS } from "./plugin";
+import { layerConfig, substituteEnv } from "./project-config";
+
+export { mergeConfig } from "./project-config";
 
 /** How long `opencode serve` may take to print its URL. It usually takes 200-400 ms. */
 export const OPENCODE_START_TIMEOUT_MS = 20_000;
@@ -16,6 +19,11 @@ export interface OpenCodeServerOptions {
   env?: Record<string, string>;
   /** Inline config (`OPENCODE_CONFIG_CONTENT`), layered over the user's own config. */
   config?: Record<string, unknown>;
+  /**
+   * The project's own config (`readProjectConfig`), layered under the user's inline config and
+   * CodeDen's (`layerConfig`), with `{env:…}` filled in from the server's environment.
+   */
+  projectConfig?: Record<string, unknown>;
   /** Aborting stops the server at any point, including start-up. */
   signal?: AbortSignal;
   startTimeoutMs?: number;
@@ -56,7 +64,13 @@ export class OpenCodeServer {
       ["serve", "--stdio", "--hostname", "127.0.0.1", "--port", "0"],
       {
         cwd: opts.cwd,
-        env: openCodeServerEnv(process.env, opts.env, password, opts.config ?? {}),
+        env: openCodeServerEnv(
+          process.env,
+          opts.env,
+          password,
+          opts.config ?? {},
+          opts.projectConfig,
+        ),
         stdio: ["pipe", "pipe", "pipe"],
       },
     );
@@ -181,14 +195,16 @@ const tail = (stderr: string) => (stderr.trim() ? `: ${stderr.trim().slice(-500)
  * The server's environment: the runner's without CodeDen's own variables (`agentEnv`), the
  * session's extras, the password and the inline config. `ELECTRON_RUN_AS_NODE` and any
  * inherited OpenCode secrets are dropped (Windows env names are case-insensitive, so matching
- * ignores case). A user's own
- * `OPENCODE_CONFIG_CONTENT` is kept underneath CodeDen's.
+ * ignores case). A user's own `OPENCODE_CONFIG_CONTENT` is kept underneath CodeDen's, and the
+ * project's config (`projectConfig`) underneath both (`layerConfig`). Its `{env:…}` values come
+ * from the server's environment, which never holds CodeDen's own variables (`agentEnv`).
  */
 export function openCodeServerEnv(
   base: NodeJS.ProcessEnv,
   extra: Record<string, string> | undefined,
   password: string,
   config: Record<string, unknown>,
+  projectConfig?: Record<string, unknown>,
 ): NodeJS.ProcessEnv {
   const drop = new Set(["ELECTRON_RUN_AS_NODE", ...HIDDEN_ENV_VARS]);
   const env: NodeJS.ProcessEnv = {};
@@ -198,8 +214,11 @@ export function openCodeServerEnv(
     if (upper === "OPENCODE_CONFIG_CONTENT") userConfig = value;
     if (!drop.has(upper)) env[key] = value;
   }
+  const project = projectConfig ? substituteEnv(projectConfig, env) : undefined;
   env.OPENCODE_PASSWORD = password;
-  env.OPENCODE_CONFIG_CONTENT = JSON.stringify(mergeConfig(parseConfig(userConfig), config));
+  env.OPENCODE_CONFIG_CONTENT = JSON.stringify(
+    layerConfig(project, parseConfig(userConfig), config),
+  );
   return env;
 }
 
@@ -213,23 +232,4 @@ function parseConfig(text: string | undefined): Record<string, unknown> {
   } catch {
     return {};
   }
-}
-
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  !!v && typeof v === "object" && !Array.isArray(v);
-
-/** Deep-merge `over` onto `base`: objects merge, `plugins` arrays concatenate, the rest wins. */
-export function mergeConfig(
-  base: Record<string, unknown>,
-  over: Record<string, unknown>,
-): Record<string, unknown> {
-  const out: Record<string, unknown> = { ...base };
-  for (const [key, value] of Object.entries(over)) {
-    const prev = out[key];
-    if (key === "plugins" && Array.isArray(prev) && Array.isArray(value))
-      out[key] = [...prev, ...value];
-    else if (isRecord(prev) && isRecord(value)) out[key] = mergeConfig(prev, value);
-    else out[key] = value;
-  }
-  return out;
 }

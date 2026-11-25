@@ -85,6 +85,7 @@ export function SessionOptions({ session, running }: { session: Session; running
     <>
       <ModelPicker
         providers={providers}
+        projectId={session.projectId}
         lockedProvider={session.provider}
         handoff={
           session.role === "agent"

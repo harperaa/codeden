@@ -30,12 +30,26 @@ export interface PlanDeps {
  * otherwise the app starts one. A stale or unreadable lock means start.
  */
 export async function planServer(home: string, deps: PlanDeps = defaultDeps): Promise<ServerPlan> {
+  const lock = liveLock(home, deps);
+  if (!lock) return { kind: "start" };
+  return (await deps.healthy(lock.port)) ? { kind: "attach", lock } : { kind: "start" };
+}
+
+/**
+ * Whether Help > Retry may connect again for an attached server that stopped answering: when
+ * that server is gone, or the home's server answers (perhaps on another port). A server that
+ * still runs but doesn't answer (busy or stuck) is kept, so a retry never starts a second
+ * server on the same data beside it.
+ */
+export async function mayReconnect(home: string, deps: PlanDeps = defaultDeps): Promise<boolean> {
+  const lock = liveLock(home, deps);
+  return lock === null || (await deps.healthy(lock.port));
+}
+
+/** The home's server lock, when it parses and names a live process. */
+function liveLock(home: string, deps: PlanDeps): ServerLock | null {
   const parsed = ServerLock.safeParse(deps.readLock(homeFiles(home).serverLock));
-  if (!parsed.success) return { kind: "start" };
-  if (!deps.isAlive(parsed.data.pid)) return { kind: "start" };
-  return (await deps.healthy(parsed.data.port))
-    ? { kind: "attach", lock: parsed.data }
-    : { kind: "start" };
+  return parsed.success && deps.isAlive(parsed.data.pid) ? parsed.data : null;
 }
 
 /** The install token, or null when the home has none yet (the server creates it). */
@@ -66,14 +80,16 @@ const defaultDeps: PlanDeps = {
     }
   },
   isAlive: isProcessAlive,
-  async healthy(port) {
-    try {
-      const res = await fetch(`http://127.0.0.1:${port}/api/health`, {
-        signal: AbortSignal.timeout(2000),
-      });
-      return HealthResponse.safeParse(await res.json()).success;
-    } catch {
-      return false;
-    }
-  },
+  healthy: (port) => serverHealthy(`http://127.0.0.1:${port}`),
 };
+
+export async function serverHealthy(url: string): Promise<boolean> {
+  try {
+    const res = await fetch(new URL("/api/health", url), {
+      signal: AbortSignal.timeout(2000),
+    });
+    return res.ok && HealthResponse.safeParse(await res.json()).success;
+  } catch {
+    return false;
+  }
+}

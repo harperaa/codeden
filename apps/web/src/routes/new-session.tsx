@@ -4,6 +4,7 @@ import { useEffect, useMemo } from "react";
 import { EmptyState } from "@/components/common/bits";
 import { Composer } from "@/components/composer/composer";
 import { DraftOptions } from "@/components/composer/draft-options";
+import { useProjectProviders } from "@/components/composer/model-picker/use-project-models";
 import { ConflictCard } from "@/components/project/conflict-card";
 import { NewSessionHeader } from "@/components/project/new-session-header";
 import { useStartDraft } from "@/components/project/use-start-draft";
@@ -20,7 +21,9 @@ import { getNewSessionDraft, useNewSessionStore } from "@/stores/new-session";
 export function NewSessionPage({ projectId }: { projectId: string }) {
   const loaded = useSnapshot().data !== undefined;
   const project = useProject(projectId);
-  const providers = useSnapshotData((s) => s.runner.providers, []);
+  const runnerProviders = useSnapshotData((s) => s.runner.providers, []);
+  // The project's own model lists, so its default and its config's models resolve (#643).
+  const { providers } = useProjectProviders(projectId, runnerProviders);
   const defaultAutonomy = useSnapshotData<AutonomyLevel>(
     (s) => s.settings.autonomy.default,
     "auto",
@@ -87,10 +90,12 @@ export function NewSessionPage({ projectId }: { projectId: string }) {
         placeholder="Describe the task — @ to mention files, / for commands and skills"
         options={
           <DraftOptions
-            providers={providers}
+            // The runner's lists: the picker swaps in the project's own itself.
+            providers={runnerProviders}
             choice={draft.choice}
             resolved={resolved}
             checks={checks}
+            projectId={projectId}
             projectPath={project.path}
             onChange={(choice) => setChoice(projectId, choice)}
           />

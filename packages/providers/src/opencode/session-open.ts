@@ -151,6 +151,19 @@ async function archive(client: OpenCodeClient, id: string): Promise<void> {
   }
 }
 
+/** The MCP servers OpenCode lists (`GET /api/mcp`); none when it can't say. */
+export async function mcpServerNames(client: OpenCodeClient): Promise<string[]> {
+  try {
+    const res = await client.get<{ data?: { name?: string; id?: string }[] }>("/api/mcp");
+    return (res.data ?? [])
+      .map((s) => s.name ?? s.id)
+      .filter((n): n is string => typeof n === "string");
+  } catch {
+    // Only affects how other MCP tools are labelled.
+    return [];
+  }
+}
+
 /** CodeDen's role prompt as a session instruction; false when OpenCode refused it. */
 async function setInstructions(client: OpenCodeClient, id: string, text: string): Promise<boolean> {
   try {

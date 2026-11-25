@@ -34,14 +34,20 @@ import {
   searchRows,
   tabRows,
 } from "./logic";
-import { ModelList, SetupNotice } from "./model-list";
+import { ConfigNotice, ModelList, SetupNotice } from "./model-list";
 import { ProviderRail } from "./provider-rail";
 import { PickerTrigger } from "./trigger";
 import { useCustomModels, useFavoriteModels, useHiddenModels } from "./use-model-settings";
+import { useProjectProviders } from "./use-project-models";
 import { useRefreshModels } from "./use-refresh-models";
 
 export interface ModelPickerProps {
   providers: ProviderInfo[];
+  /**
+   * The project the choice is for: providers whose models depend on the project
+   * (`capabilities.projectModels`) list that project's models, its own config included.
+   */
+  projectId?: string | null;
   /** The current choice; `null` shows `placeholder` (e.g. "Auto"). */
   value: ModelChoice | null;
   onChange: (next: ModelChoice) => void;
@@ -77,7 +83,8 @@ const valueKey = (v: ModelChoice | null) => (v ? `${v.provider}|${v.model}|${v.e
  * levels. Picking a model moves focus to its levels; picking a level closes the picker.
  */
 export function ModelPicker({
-  providers: listed,
+  providers: given,
+  projectId,
   value,
   onChange,
   lockedProvider,
@@ -111,7 +118,8 @@ export function ModelPicker({
 
   const { favorites, toggle: toggleFavorite } = useFavoriteModels();
   const { hidden, toggle: toggleHidden } = useHiddenModels();
-  // The user's custom model ids join the listed ones (§13).
+  // The project's own lists where they differ (#643); the user's custom ids join them (§13).
+  const { providers: listed, warnings } = useProjectProviders(projectId, given);
   const { custom } = useCustomModels();
   const providers = withCustomModels(listed, custom);
   const tabs = providerTabs(providers, checks, lockedProvider, {
@@ -144,7 +152,7 @@ export function ModelPicker({
               ? `Refresh ${tab.provider.displayName}'s models`
               : "Refresh every provider's models",
           busy: models.refreshing,
-          onRefresh: () => void models.refresh(refreshIds),
+          onRefresh: () => void models.refresh(refreshIds, projectId),
         }
       : undefined;
 
@@ -162,8 +170,9 @@ export function ModelPicker({
   const list = listFor(query, tab, showHidden);
   const rows = list.rows;
   const starred = new Set(favorites.map((f) => rowKey(f.provider, f.model)));
+  const configWarnings = tab?.kind === "provider" ? warnings.get(tab.id) : undefined;
   const notice =
-    !searching && tab?.kind === "provider" && !tab.availability.ready ? (
+    searching || tab?.kind !== "provider" ? undefined : !tab.availability.ready ? (
       <SetupNotice
         name={tab.provider.displayName}
         availability={tab.availability}
@@ -172,6 +181,8 @@ export function ModelPicker({
           void navigate({ to: "/setup" });
         }}
       />
+    ) : configWarnings ? (
+      <ConfigNotice warnings={configWarnings} />
     ) : undefined;
 
   const firstKey = (list: ModelRow[]) =>

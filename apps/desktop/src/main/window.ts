@@ -1,5 +1,5 @@
 import { writeFileSync } from "node:fs";
-import { app, BrowserWindow, nativeTheme, type Rectangle, screen, shell } from "electron";
+import { BrowserWindow, nativeTheme, type Rectangle, screen, shell } from "electron";
 import { applyContentSecurityPolicy } from "./content-security";
 import { hardenWindowTitle } from "./harden-display";
 import { allowPermission, externalUrl, isServerUrl, redactToken } from "./security";
@@ -15,6 +15,8 @@ export interface MainWindowOptions {
   /** Close hides the window instead (keep running in the tray); read on every close. */
   hideOnClose: () => boolean;
   log: (message: string) => void;
+  quit: () => void;
+  onRendererGone: (details: Electron.RenderProcessGoneDetails, retry: boolean) => void;
 }
 
 /**
@@ -28,6 +30,7 @@ export class MainWindow {
   private readonly zoomControl: WindowZoom;
   private origin: string | null = null;
   private quitting = false;
+  private lastRendererExit = -Infinity;
 
   constructor(private readonly opts: MainWindowOptions) {
     const saved = readWindowState(opts.stateFile);
@@ -64,6 +67,13 @@ export class MainWindow {
     this.window.once("ready-to-show", () => {
       if (opts.show) this.show();
     });
+    this.window.webContents.on("render-process-gone", (_event, details) => {
+      opts.log(`window: renderer exited (code ${details.exitCode}, reason ${details.reason})`);
+      const now = performance.now();
+      const retry = now - this.lastRendererExit >= 30_000;
+      this.lastRendererExit = now;
+      if (!this.quitting) opts.onRendererGone(details, retry);
+    });
     // The title bar shows the version line; the page's title only adds its waiting count.
     this.window.on("page-title-updated", (event, title) => {
       event.preventDefault();
@@ -91,6 +101,21 @@ export class MainWindow {
       // The error quotes the launch URL, which carries the install token.
       throw new Error(redactToken(String(error)));
     }
+  }
+
+  async showRecovery(): Promise<void> {
+    if (this.quitting || this.window.isDestroyed()) return;
+    const menuHint = process.platform === "darwin" ? "" : "Press Alt to show the menu bar. ";
+    const page = `<!doctype html><meta charset="utf-8"><title>CodeDen</title>
+      <h1>CodeDen could not load</h1>
+      <p>${menuHint}In the Help menu, choose Retry Loading CodeDen or Export Diagnostics.</p>`;
+    try {
+      await this.window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(page)}`);
+    } catch {
+      this.opts.log("window: could not show the recovery page");
+      return;
+    }
+    if (this.opts.show && !this.window.isVisible()) this.show();
   }
 
   get serverOrigin(): string | null {
@@ -161,7 +186,7 @@ export class MainWindow {
       event.preventDefault();
       // Keep running in the tray, or (with that setting off) closing the window quits.
       if (this.opts.hideOnClose()) this.window.hide();
-      else app.quit();
+      else this.opts.quit();
     });
   }
 

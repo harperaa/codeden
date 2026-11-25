@@ -8,6 +8,8 @@ export interface MenuActions {
   checkForUpdates: () => void;
   openDocs: () => void;
   openLogs: () => void;
+  exportDiagnostics: () => void;
+  retryLoading: () => void;
   quit: () => void;
   zoom: (command: ZoomCommand) => void;
 }
@@ -108,6 +110,8 @@ export function appMenuTemplate(
     submenu: [
       { label: `${HARDEN_PRODUCT_NAME} Documentation`, click: actions.openDocs },
       { label: "Show Logs", click: actions.openLogs },
+      { label: "Export Diagnostics", click: actions.exportDiagnostics },
+      { label: "Retry Loading CodeDen", click: actions.retryLoading },
       ...(mac ? [] : [{ type: "separator" } as const, updates]),
     ],
   });

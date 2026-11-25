@@ -1,5 +1,6 @@
 import { binName, CD, unwrap } from "./command-words";
-import { isWin, type PathContext } from "./paths";
+import { namesCurrentFolder } from "./current-folder";
+import { hereLength, isWin, type PathContext } from "./paths";
 import type { SimpleCommand } from "./shell";
 
 /**
@@ -33,6 +34,8 @@ const MENTION = /^([A-Za-z_]\w*)(\+=.*|\[.*)?$/s;
 const PS_TARGET = /^\s*(?:\[[^\]]*\]\s*)*\$(?:\w+:)?(\w+)\s*=\s*$/;
 /** A whole substitution: `$(…)` or backticks. */
 const SUBSTITUTION = /^(?:\$\(.*\)|`.*`)$/s;
+/** `$(pwd)` or `` `pwd` `` at the start of a value, followed by its end or a `/`. */
+const HERE = /^(?:\$\(\s*pwd\s*\)|`\s*pwd\s*`)(?=$|\/)/;
 
 /**
  * `list` with the variables it assigns filled in where later commands expand them, also inside
@@ -156,8 +159,9 @@ function substitute(
     const text = word.replace(TEMP_DEFAULT, "$TMPDIR").replace(REFERENCE, (ref, braced, bare) => {
       const written = (braced ?? bare) as string;
       const name = keyOf(written, table);
-      // `$PWD` is where the shell is, unless the command line set it.
-      if (name === undefined) return written === "PWD" ? "." : ref;
+      // `$PWD`, unless the command line set it, stays: `./paths` puts where the shell is in its
+      // place, where it is used (`./current-folder`).
+      if (name === undefined) return ref;
       const known = value(name);
       if (known !== undefined || !how.every || !ambient(name) || table.get(name) !== null) {
         return known ?? ref;
@@ -238,14 +242,15 @@ function assigned(
   given: string[],
 ): string[] | null {
   if (isPlain(cmd, word)) return [value];
-  // `d=$(pwd)/dist`: a path from where the shell is.
-  const here = value.replace(/\$\(pwd\)|`pwd`/g, ".");
-  if (here !== value && !holdsVariable(here) && !holdsSubstitution(here)) return [here];
-  // `tmp=$(mktemp -d)`: a new folder in temp. `here=$(pwd)`: where the shell is.
+  // `here=$(pwd)`, `d=$(pwd)/dist`: a path from where the shell is, kept as written for `./paths`
+  // to fill in where it is used. Not as `.`: `"$here../x"` is beside that folder, not in it.
+  const here = HERE.exec(value)?.[0].length ?? 0;
+  const rest = value.slice(here);
+  if (here > 0 && !holdsVariable(rest) && !holdsSubstitution(rest)) return [value];
+  // `tmp=$(mktemp -d)`: a new folder in temp.
   const [inner] = cmd.nested;
   const ran = inner?.length === 1 ? unwrap((inner[0] as SimpleCommand).words).tokens : [];
   if (given.length !== 1 || cmd.nested.length !== 1 || !SUBSTITUTION.test(value)) return null;
-  if (binName(ran[0]) === "pwd" && ran.length === 1) return ["."];
   if (binName(ran[0]) !== "mktemp") return null;
   const args = ran.slice(1);
   if (args.some((a) => /^(-p|--tmpdir)/.test(a))) return null;
@@ -328,14 +333,25 @@ function set(table: Table, name: string, values: string[] | null): void {
 }
 
 /**
+ * Where a name of where the shell is (`$PWD`, `$(pwd)`) may end: the end, a separator, a quote,
+ * a space or the shell's punctuation. Followed by anything else (`$PWD../x`), it is part of another
+ * name, only known when the command runs.
+ */
+const ENDS = String.raw`(?=$|[\\/"'\s;&|)])`;
+
+/**
  * Variables whose value the path rules know (`./paths`), or that name where the shell is or what
- * a pipe hands a block (`$_`): not a path built when the command runs.
+ * a pipe hands a block (`$_`): not a path built when the command runs. PowerShell's own values
+ * (`$_`, `$PSItem`, with properties, `$null`, `$true`, `$false`) only as a whole word
+ * (`Remove-Item $_`, `> $null`): `./paths` puts no folder in their place, and a POSIX shell (or
+ * PowerShell, for `$null`) expands them to nothing, so `"$null/home/me/x"` is `/home/me/x`.
  */
 const KNOWN = [
   /\$(?:HOME|\{HOME\})(?!\w)/gi,
   /\$(?:env:(?:USERPROFILE|TEMP|TMP|CODEDEN_HOME)|\{env:(?:USERPROFILE|TEMP|TMP|CODEDEN_HOME)\})(?!\w)/gi,
-  /\$(?:TMPDIR|TEMP|TMP|PWD|CODEDEN_HOME|\{(?:TMPDIR|TEMP|TMP|PWD|CODEDEN_HOME)\})(?!\w)/g,
-  /\$(?:_|PSItem|null|true|false|pwd)(?!\w)/gi,
+  /\$(?:TMPDIR|TEMP|TMP|CODEDEN_HOME|\{(?:TMPDIR|TEMP|TMP|CODEDEN_HOME)\})(?!\w)/g,
+  new RegExp(String.raw`\$(?:PWD|\{PWD\})${ENDS}`, "gi"),
+  /(?<![^\s"'=(,;|{])\$(?:(?:_|PSItem)(?:\.\w+)*|null|true|false)(?=$|[\s"'),;|}])/gi,
   /%(?:USERPROFILE|TEMP|TMP|CODEDEN_HOME|CD)%/gi,
 ];
 /** A variable or a parameter: `$x`, `${x…}`, `$1`, `$@`, `$*`. */
@@ -351,10 +367,16 @@ export const holdsVariable = (text: string): boolean => VARIABLE.test(withoutKno
 
 /**
  * Substitutions whose output stays where the path already points: the folder the shell is in, the
- * repository's top folder, a new temp file, or a part of a name (`log-$(date +%F).txt`).
+ * repository's top folder or a new temp file, ending there (`ENDS`), or a part of a name
+ * (`log-$(date +%F).txt`).
  */
-const KNOWN_OUTPUT =
-  /\$\((?:pwd|Get-Location|git rev-parse --show-toplevel|mktemp(?: -d)?(?: ([\w.-]+))?|date(?: [^()`$]*)?|basename [^()`$]*|\$(?:PWD(?:\.Path)?|env:TE?MP|(?:_|PSItem)(?:\.\w+)*))\)|`pwd`/gi;
+const KNOWN_OUTPUT = new RegExp(
+  [
+    String.raw`(?:\$\((?:pwd|Get-Location|git rev-parse --show-toplevel|mktemp(?: -d)?(?: ([\w.-]+))?|\$(?:PWD(?:\.Path)?|env:TE?MP))\)|${"`"}pwd${"`"})${ENDS}`,
+    /\$\((?:date(?: [^()`$]*)?|basename [^()`$]*|\$(?:_|PSItem)(?:\.\w+)*)\)/.source,
+  ].join("|"),
+  "gi",
+);
 
 /** True when `text` holds a substitution whose output isn't known: `$(cat list)`, backticks. */
 export const holdsSubstitution = (text: string): boolean =>
@@ -368,14 +390,21 @@ export const holdsSubstitution = (text: string): boolean =>
 
 /**
  * True when `target`, a path `cmd` writes or deletes, still holds a variable, a parameter or a
- * substitution the shell fills in when the command runs: where it points is only known then.
+ * substitution the shell fills in when the command runs: where it points is only known then. A
+ * name of where the shell is at its start (`$(pwd)/dist`) is known only where `./paths` can put
+ * that folder in its place (`hereLength`): not `$pwd` in a POSIX shell, `$PWD../x`, or `$(pwd)`
+ * once the command line redefines `pwd`.
  */
 export function unresolvedTarget(cmd: SimpleCommand, target: string, ctx: PathContext): boolean {
-  if (isWin(ctx) && CMD_VARIABLE.test(withoutKnown(target))) return true;
+  const here = hereLength(target, ctx);
+  const rest = target.slice(here);
+  if (isWin(ctx) && CMD_VARIABLE.test(withoutKnown(rest))) return true;
   for (const word of (cmd as Marked).unsure ?? []) {
     if (word.includes(target) || target.includes(word)) return true;
   }
-  if ((!holdsVariable(target) && !holdsSubstitution(target)) || !cmd.vars) return false;
+  const built =
+    (here === 0 && namesCurrentFolder(target)) || holdsVariable(rest) || holdsSubstitution(rest);
+  if (!built || !cmd.vars) return false;
   for (const word of cmd.vars) if (word.includes(target) || target.includes(word)) return true;
   return false;
 }

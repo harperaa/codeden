@@ -30,6 +30,14 @@ export interface FloorPalette {
   sign: Rgb;
   signInk: string;
   hazard: Rgb;
+  /** Desk props: the bug in the jar and the reviewer's pen. */
+  red: Rgb;
+  /** Desk props: polished metal (a wrench, a jar's lid, a clip), bright against any desk top. */
+  chrome: Rgb;
+  /** Desk props: a blueprint roll. */
+  blueprint: Rgb;
+  /** Desk props: sticky notes, in turn. */
+  notes: Rgb[];
   /** The signal tower's lamps, lit. */
   lamp: { green: Rgb; amber: Rgb; red: Rgb };
   /** The tip light at rest: warm white. */
@@ -80,6 +88,10 @@ export function readPalette(
     sign: ok(0.27, 0.012, 264),
     signInk: "#f5f3ee",
     hazard: ok(0.84, 0.16, 90),
+    red: ok(0.6, 0.21, 27),
+    chrome: ok(0.88, 0.008, 250),
+    blueprint: ok(0.52, 0.13, 255),
+    notes: [ok(0.9, 0.15, 98), ok(0.8, 0.12, 350), ok(0.84, 0.1, 200)],
     lamp: { green: ok(0.72, 0.17, 155), amber: ok(0.8, 0.16, 70), red: ok(0.65, 0.2, 25) },
     tip: ok(0.85, 0.02, 80),
     ink: cssToSrgb("#1D2129") as Rgb,

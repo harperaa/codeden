@@ -55,8 +55,8 @@ export type TurnOutcome =
     };
 
 /**
- * An OpenCode error as a failed turn outcome. OpenCode lists models per folder, and a session
- * runs in its worktree, so "Model unavailable" says where the model's provider must be set.
+ * An OpenCode error as a failed turn outcome. "Model unavailable" says where the model's
+ * provider must be set: the session sees the user's global config and the project's own (#643).
  */
 export function failure(error: OcError | undefined): TurnOutcome {
   const { kind, retryAt } = classifyOpenCodeError(error);
@@ -66,7 +66,7 @@ export function failure(error: OcError | undefined): TurnOutcome {
     code: error?.type ? `opencode_${error.type.replace(/[^a-z0-9]+/gi, "_")}` : "turn_failed",
     message:
       error?.type === NO_ROUTE && MODEL_UNAVAILABLE.test(message)
-        ? `${message}. OpenCode doesn't list it in this session's folder: a provider set in a project opencode.json that git doesn't track is missing from worktrees, so set it in your global OpenCode config or commit the file`
+        ? `${message}. OpenCode doesn't list it for this session: set its provider in your global OpenCode config or in the project's opencode.json (a file that isn't valid JSON is left out), then use Refresh models in the model picker`
         : message,
     kind,
     ...(retryAt ? { retryAt } : {}),

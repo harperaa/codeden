@@ -162,6 +162,39 @@ describe("runner protocol", () => {
     );
   });
 
+  it("round-trips provider.models for a project, and session options naming the project", () => {
+    const command = roundTrip(RunnerCommand, {
+      name: "provider.models",
+      providerId: "opencode",
+      projectDir: "/repo",
+      refresh: true,
+    });
+    expect(command.name === "provider.models" && command.refresh).toBe(true);
+    expect(RunnerCommand.safeParse({ name: "provider.models", providerId: "x" }).success).toBe(
+      false,
+    );
+    const result = roundTrip(RunnerCommandResults["provider.models"], {
+      models: [{ id: "9router/Worker", label: "Worker" }],
+      warnings: ["Skipped opencode.json: not valid JSON"],
+    });
+    expect(result.models[0]?.efforts).toEqual([]);
+    // Warnings default to none.
+    expect(roundTrip(RunnerCommandResults["provider.models"], { models: [] }).warnings).toEqual([]);
+    const start = roundTrip(RunnerCommand, {
+      name: "session.start",
+      sessionId: "s1",
+      providerId: "opencode",
+      options: {
+        sessionId: "s1",
+        role: "agent",
+        cwd: "/wt/s1",
+        projectDir: "/repo",
+        autonomy: "auto",
+      },
+    });
+    expect(start.name === "session.start" && start.options.projectDir).toBe("/repo");
+  });
+
   it("round-trips commands and results", () => {
     const start = roundTrip(ServerToRunnerMessage, {
       type: "command",

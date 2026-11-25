@@ -10,7 +10,13 @@ import { AutonomyLevel, Id, ProviderId, ReasoningEffort } from "../common";
 import { UnpushedWork } from "../execution";
 import { UserInput } from "../input";
 import { CHECK_MAX_TIMEOUT_SEC, ProjectConfigFile } from "../project-config";
-import { ProviderInfo, ProviderStatus, RuntimeResponse, SessionOptions } from "../provider";
+import {
+  ProjectModels,
+  ProviderInfo,
+  ProviderStatus,
+  RuntimeResponse,
+  SessionOptions,
+} from "../provider";
 import { ProviderHistoryCommandResults, ProviderHistoryCommands } from "../provider-history";
 import { BrowserCommandResults, BrowserCommands } from "./browser";
 import { BrowserFormCommandResults, BrowserFormCommands } from "./browser-forms";
@@ -80,6 +86,18 @@ export const RunnerCommand = z.discriminatedUnion("name", [
      * availability checks, which must not start provider CLIs to list models. Default true.
      */
     refreshModels: z.boolean().optional(),
+  }),
+  /**
+   * A provider's models for one project (`capabilities.projectModels`), with the project's own
+   * config included; the provider's usual list for any other provider. Kept per project, so
+   * only `refresh` (or a change to the project's config) asks the provider again.
+   */
+  z.object({
+    name: z.literal("provider.models"),
+    providerId: ProviderId,
+    /** The project's folder on the runner's machine (its main checkout). */
+    projectDir: z.string().min(1),
+    refresh: z.boolean().optional(),
   }),
   /** One tool-less utility-model call (§7.4) through a provider's `utilityModel()`. */
   z.object({
@@ -402,6 +420,7 @@ export const RunnerCommandResults = {
     /** Every provider after the refresh; set when the command asked for `waitForModels`. */
     providers: z.array(ProviderInfo).optional(),
   }),
+  "provider.models": ProjectModels,
   "provider.oneShot": z.object({ text: z.string(), model: z.string() }),
   "provider.fork": z.object({ resumeToken: z.string().min(1) }),
   ...ProviderHistoryCommandResults,

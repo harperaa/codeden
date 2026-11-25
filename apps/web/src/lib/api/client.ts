@@ -28,6 +28,7 @@ import type {
   LoginToolId,
   Project,
   ProjectCheck,
+  ProjectModelsResponse,
   ProviderHistoryResponse,
   RefreshModelsResponse,
   RefreshProjectResponse,
@@ -283,6 +284,15 @@ export interface CodeDenClient {
   loginCommand(tool: LoginToolId): Promise<LoginCommandResponse>;
   /** Ask a provider for its models again (a model was released, the CLI was updated). */
   refreshModels(providerId: string): Promise<RefreshModelsResponse>;
+  /**
+   * A provider's models for one project (`capabilities.projectModels`: with the project's own
+   * config); `refresh` asks the provider again.
+   */
+  projectModels(
+    providerId: string,
+    projectId: string,
+    opts?: { refresh?: boolean },
+  ): Promise<ProjectModelsResponse>;
   /**
    * The conversations CodeDen started that a provider's own apps still list as the user's
    * history (`capabilities.vendorHistory`). Changes nothing.

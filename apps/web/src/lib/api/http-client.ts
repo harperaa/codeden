@@ -18,6 +18,7 @@ import {
   LoginCommandResponse,
   Project,
   ProjectChecksResponse,
+  ProjectModelsResponse,
   ProviderHistoryResponse,
   RefreshModelsResponse,
   RefreshProjectResponse,
@@ -211,6 +212,14 @@ export function createHttpClient(origin: string, opts: HttpClientOptions = {}): 
     refreshModels: (providerId) =>
       post(`/providers/${encodeURIComponent(providerId)}/refresh-models`, {}, (v) =>
         RefreshModelsResponse.parse(v),
+      ),
+    projectModels: (providerId, projectId, o) =>
+      get(
+        `/providers/${encodeURIComponent(providerId)}/models?${new URLSearchParams({
+          projectId,
+          ...(o?.refresh ? { refresh: "1" } : {}),
+        })}`,
+        (v) => ProjectModelsResponse.parse(v),
       ),
     getProviderHistory: (providerId) =>
       get(`/providers/${encodeURIComponent(providerId)}/history`, (v) =>

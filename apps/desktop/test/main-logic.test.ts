@@ -5,7 +5,7 @@ import { DEFAULT_PORT, parseLaunchArgs } from "../src/main/args";
 import { launchUrl } from "../src/main/connection";
 import { appMenuTemplate } from "../src/main/menu";
 import { allowPermission, externalUrl, isServerUrl, redactToken } from "../src/main/security";
-import { homeFiles, planServer } from "../src/main/server-plan";
+import { homeFiles, mayReconnect, planServer } from "../src/main/server-plan";
 import { trayView } from "../src/main/tray-view";
 import { DEFAULT_SIZE, restoreBounds } from "../src/main/window-state";
 
@@ -83,6 +83,14 @@ describe("attach or start (§17)", () => {
     expect(await planServer("/h", deps({ healthy: async () => false }))).toEqual({
       kind: "start",
     });
+  });
+
+  it("lets Retry connect again only when the server is gone or answers", async () => {
+    expect(await mayReconnect("/h", deps({ readLock: () => null }))).toBe(true);
+    expect(await mayReconnect("/h", deps({ isAlive: () => false }))).toBe(true);
+    expect(await mayReconnect("/h", deps())).toBe(true);
+    // Still running but not answering: never start a second server beside it.
+    expect(await mayReconnect("/h", deps({ healthy: async () => false }))).toBe(false);
   });
 
   it("reads the lock where the server writes it and builds the window URL", () => {
@@ -197,6 +205,8 @@ describe("app menu", () => {
     checkForUpdates: noop,
     openDocs: noop,
     openLogs: noop,
+    exportDiagnostics: noop,
+    retryLoading: noop,
     quit: noop,
     zoom: noop,
   };

@@ -9,10 +9,15 @@ import { serverLog } from "../src/server/log";
 const STUCK = resolve(__dirname, "support/stuck-server.mjs");
 const dirs: string[] = [];
 
-function stuckServer(log: string[], home = mkdtempSync(join(tmpdir(), "codeden-server-process-"))) {
+function stuckServer(
+  log: string[],
+  home = mkdtempSync(join(tmpdir(), "codeden-server-process-")),
+  startupTimeoutMs?: number,
+): ServerProcess {
   dirs.push(home);
   return new ServerProcess({
     entry: STUCK,
+    startupTimeoutMs,
     home,
     port: 1,
     fake: true,
@@ -69,6 +74,16 @@ describe("ServerProcess.start", () => {
       }
     },
   );
+});
+
+it("rejects startup and stops a child that never reports readiness", async () => {
+  vi.stubEnv("STUCK_SERVER_MODE", "no-ready");
+  const server = stuckServer([], undefined, 100);
+  try {
+    await expect(server.start()).rejects.toThrow("startup deadline");
+  } finally {
+    await server.stop({ stopRunner: false, timeoutMs: 100 });
+  }
 });
 
 describe("ServerProcess.stop", () => {

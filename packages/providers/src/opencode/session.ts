@@ -16,12 +16,13 @@ import { seg } from "./client";
 import { OpenCodeCommands, type OpenCodeRoute, runCommand, withSkill } from "./commands";
 import { mcpName, openCodeConfig, toPromptBody } from "./config";
 import type { TurnOutcome } from "./errors";
-import { userMessageEvent } from "./items";
+import { noticeEvent, type SessionNotice, userMessageEvent } from "./items";
 import { OpenCodeEventMapper } from "./mapper";
 import { OpenCodePolicy } from "./policy";
+import { readProjectConfig } from "./project-config";
 import type { OcEvent } from "./protocol";
 import { OpenCodeServer } from "./server";
-import { OpenCodeModelChoice, openOrResume } from "./session-open";
+import { mcpServerNames, OpenCodeModelChoice, openOrResume } from "./session-open";
 
 export interface OpenCodeSessionConfig {
   executable: ResolvedCommand;
@@ -59,7 +60,8 @@ export class OpenCodeSession implements ProviderSession {
   private readonly toolCtx: { cwd: string; mcpServers: string[] };
   /** Instructions that could not be set on the session go in front of the next prompt. */
   private inlineInstructions: string | undefined;
-  private pendingNotice: string | undefined;
+  /** Warnings for the next turn; `shown` keeps one from repeating after a server restart. */
+  private readonly notices = { pending: [] as SessionNotice[], shown: new Set<string>() };
   /** The prompt being sent: recorded as the user message of its turn once the turn starts. */
   private pendingInput: { turnId: string; input: UserInput } | undefined;
 
@@ -270,6 +272,11 @@ export class OpenCodeSession implements ProviderSession {
   }
 
   private async boot(): Promise<OpenCodeServer> {
+    // The project's own config that the worktree lacks (git doesn't track it there), #643.
+    const project = this.opts.projectDir
+      ? readProjectConfig(this.opts.projectDir, { skipIn: this.opts.cwd })
+      : undefined;
+    for (const message of project?.warnings ?? []) this.notice("project_config_skipped", message);
     const server = await OpenCodeServer.start(this.config.executable, {
       cwd: this.opts.cwd,
       ...(this.opts.env ? { env: this.opts.env } : {}),
@@ -277,6 +284,7 @@ export class OpenCodeSession implements ProviderSession {
         mcpServers: this.opts.mcpServers,
         ...(this.config.pluginDir ? { pluginDir: this.config.pluginDir } : {}),
       }),
+      ...(project?.config ? { projectConfig: project.config } : {}),
       ...(this.config.startTimeoutMs ? { startTimeoutMs: this.config.startTimeoutMs } : {}),
     });
     try {
@@ -320,7 +328,7 @@ export class OpenCodeSession implements ProviderSession {
         this.mapper.rootSession = id;
       },
     });
-    if (opened.notice) this.pendingNotice = opened.notice;
+    if (opened.notice) this.notice("resume_failed", opened.notice);
     if (opened.inlineInstructions) this.inlineInstructions = opened.inlineInstructions;
     this.mapper.currentModel = opened.model;
     this.events.push({
@@ -346,15 +354,8 @@ export class OpenCodeSession implements ProviderSession {
 
   /** MCP servers the session can see, so their tools render as MCP calls. */
   private async loadMcpNames(server: OpenCodeServer): Promise<void> {
-    try {
-      const res = await server.client.get<{ data?: { name?: string; id?: string }[] }>("/api/mcp");
-      const names = (res.data ?? [])
-        .map((s) => s.name ?? s.id)
-        .filter((n): n is string => typeof n === "string");
-      this.toolCtx.mcpServers = [...new Set([...this.toolCtx.mcpServers, ...names.map(mcpName)])];
-    } catch {
-      // Only affects how other MCP tools are labelled.
-    }
+    const names = await mcpServerNames(server.client);
+    this.toolCtx.mcpServers = [...new Set([...this.toolCtx.mcpServers, ...names.map(mcpName)])];
   }
 
   private deps(): ApprovalDeps {
@@ -383,24 +384,19 @@ export class OpenCodeSession implements ProviderSession {
     this.mapper.handle(event);
   }
 
+  /** A warning for the next turn, once per session for a given message. */
+  private notice(code: string, message: string): void {
+    if (this.notices.shown.has(message)) return;
+    this.notices.shown.add(message);
+    this.notices.pending.push({ code, message });
+  }
+
   private flushNotice(): void {
-    const message = this.pendingNotice;
     const turnId = this.mapper.currentTurnId;
-    if (!message || !turnId) return;
-    this.pendingNotice = undefined;
-    this.events.push({
-      type: "item.completed",
-      threadId: this.mapper.rootThreadId,
-      turnId,
-      item: {
-        id: `resume-${turnId}`,
-        kind: "notice",
-        status: "completed",
-        level: "warning",
-        code: "resume_failed",
-        message,
-      },
-    });
+    if (!turnId) return;
+    for (const notice of this.notices.pending.splice(0)) {
+      this.events.push(noticeEvent(this.mapper.rootThreadId, turnId, notice));
+    }
   }
 
   private onExit(server: OpenCodeServer, code: number | null, stderr: string): void {

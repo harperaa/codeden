@@ -3,7 +3,12 @@ import type { DesktopUpdateCommand } from "@codeden/contracts";
 import type { LaunchArgs } from "./args";
 import { DEFAULT_PORT } from "./args";
 import { homeFiles, planServer, readToken } from "./server-plan";
-import { ServerProcess, type ServerReady, ServerStartError } from "./server-process";
+import {
+  type ServerExit,
+  ServerProcess,
+  type ServerReady,
+  ServerStartError,
+} from "./server-process";
 
 /** How the app reached its server. */
 export interface Connection {
@@ -19,6 +24,7 @@ export interface ConnectOptions {
   /** `dist/server.js`. */
   serverEntry: string;
   onUpdateCommand: (id: string, command: DesktopUpdateCommand) => void;
+  onExit: (exit: ServerExit) => void;
   onUnexpectedExit: (code: number | null) => void;
   log: (message: string) => void;
 }
@@ -50,6 +56,7 @@ export async function connect(opts: ConnectOptions): Promise<Connection> {
       fake: args.fake,
       logFile: join(homeFiles(args.home).logs, "desktop-server.log"),
       onUpdateCommand: opts.onUpdateCommand,
+      onExit: opts.onExit,
       onUnexpectedExit: opts.onUnexpectedExit,
       log,
     });

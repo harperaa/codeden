@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { AppErrorBoundary } from "@/components/common/app-error-boundary";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ApiRequestError, ClientProvider, createClient } from "@/lib/api";
 import { installClipboardFallback } from "@/lib/clipboard";
@@ -38,12 +39,14 @@ platform.onNavigate((path) => router.history.push(path));
 
 createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>
-    <ClientProvider client={client}>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider delayDuration={300}>
-          <RouterProvider router={router} />
-        </TooltipProvider>
-      </QueryClientProvider>
-    </ClientProvider>
+    <AppErrorBoundary>
+      <ClientProvider client={client}>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider delayDuration={300}>
+            <RouterProvider router={router} />
+          </TooltipProvider>
+        </QueryClientProvider>
+      </ClientProvider>
+    </AppErrorBoundary>
   </StrictMode>,
 );

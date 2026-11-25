@@ -9,13 +9,15 @@ if (recordPath) {
   const home = process.argv[process.argv.indexOf("--home") + 1];
   writeFileSync(join(home, "server-path"), process.env.PATH ?? "");
 }
-process.send({
-  type: "ready",
-  url: "http://127.0.0.1:1",
-  port: 1,
-  launchUrl: "http://127.0.0.1:1/",
-  version: "0.0.0",
-});
+if (process.env.STUCK_SERVER_MODE !== "no-ready") {
+  process.send({
+    type: "ready",
+    url: "http://127.0.0.1:1",
+    port: 1,
+    launchUrl: "http://127.0.0.1:1/",
+    version: "0.0.0",
+  });
+}
 process.on("message", (message) => {
   if (recordPath && message.type === "shutdown") process.exit(0);
 });
