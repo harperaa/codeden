@@ -1,5 +1,46 @@
 # CodeHarden releases
 
+## 2026.1124.2205 — 2026-11-24 22:05
+
+### codeharden
+- fix(automations): the shipped sync reviews name no repository
+- feat(automations): stagger a new project's scheduled starter automations
+- fix(dev-preview): the switch offers nothing after a failed lookup, and shows the Secure Foundation notes
+- test(automations): the upstream-sync reviews arrive through the started service's events
+- feat(dev-preview): show the switch on every thread, off until a person switches it on
+- feat(automations): ship the two upstream-sync review automations for hardened forks
+- fix(desktop): refuse to pack installers as codeharden in a fork without PACKAGE_NAME
+- fix(secure-foundation): the Clerk row says which command answered not logged in
+- feat(dev-preview): fill in the settings for a CodeHarden checkout
+- feat(secure-foundation): check Clerk with its own CLI, and show the Settings link on phones
+- feat(secure-foundation): requirements page before the workflow starts
+- fix(server): Secure Foundation follows the template's GitHub Actions secrets step
+- fix(server): Secure Foundation checks the Claude token instead of asking for it
+- docs(secure-foundation): note that preselecting All modules is the owner's decision
+- feat(web): remember the deploy's repository owner and say what an organisation's repository gets
+- test(server): pin that configure's manual steps reach the install summary and the last message
+- fix(server): Secure Foundation follows the template's install and dev deploy step by step
+- docs(harden): say exactly what the cooldown check does, and what the sync reviews do with its status
+- fix(harden): close the ways around the release's cooldown check, and keep the sync flow unblocked
+- fix(server): read quoted strings and negated mention tests correctly in the workflow scan
+- fix(harden): review findings on the sync cooldown
+- docs(secure-foundation): repository secrets the project's workflows need
+- feat(web): show the missing repository secrets on the Secure Foundation card
+- feat(server): list the repository secrets a Secure Foundation project's workflows use
+- feat(contracts): the repository secrets a Secure Foundation project's workflows need
+- docs(harden): the sync cooldown, where it is enforced and what is an instruction
+- feat(harden): hold the 48-hour sync cooldown at the merge, on the pull request and at the release
+- fix(web): make the dev preview settings' button follow the state
+- ci: run the tests when the root README changes
+- docs(readme): say CodeHarden throughout, credit the CodeDen repository on top
+- Merge pull request #33 from harperaa/codeden/say-hi-9546
+- fix(web): keep the dev preview link on the card after the setup session is archived
+- feat(secure-foundation): fill in the dev preview's settings for a new project
+- test(server): pin that a preview's commands get no input and no terminal
+- ci: build the installers without any cache, and check the tag's commit right after checkout
+- ci: write the signing job's steps out, read the gate with actions: read, require one branch rule
+- ci: require an approval before the installers are signed and published
+
 ## 2026.1123.1325 — 2026-11-23 13:25
 
 ### codeharden
