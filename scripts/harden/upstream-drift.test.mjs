@@ -426,6 +426,10 @@ const CALL_SITES = [
   ["packages/contracts/src/harden-channel.ts", "the Secure Foundation template in the fork's configuration", "HARDEN_TEMPLATE_REPOSITORY", "HARDEN_TEMPLATE_BRANCH", "__CODEHARDEN_TEMPLATE_REPOSITORY__", "__CODEHARDEN_TEMPLATE_BRANCH__"],
   ["packages/contracts/src/provider.ts", "the capability the setup brief reads instead of a provider id", "projectCommands"],
   ["packages/providers/src/claude/adapter.ts", "the provider that runs project command files says so", /projectCommands: true/],
+  // --- The upstream-sync review automations: fork-only, offered from upstream's automation service
+  ["packages/contracts/src/index.ts", "exports the list of the shipped upstream-sync review automations", /export \* from "\.\/harden-sync-automations"/],
+  ["apps/server/src/services/automations/automation-service.ts", "a hardened fork's project is given the upstream-sync reviews (off) at start, on a project change and when an automation is deleted", /this\.hardenSync = new HardenSyncAutomations\(/, /this\.sources\.start\(\);\n\s+this\.offerHardenSync\(\);/, /e\.type === "automation\.deleted"\)\) \{\n\s+this\.offerHardenSync\(\);/, /this\.hardenSync\.offer\(\);/],
+  ["apps/server/src/services/harden/sync-automations.ts", "the reviews go only to a recognised checkout, always off, never beside an automation with the same work key and never back after a deletion", "isHardenedForkCheckout", "HARDEN_SYNC_AUTOMATIONS", /enabled: false,/, "wasDeleted"],
   // --- Dev preview: a fork-only feature, slotted into upstream's files one line at a time
   ["packages/contracts/src/index.ts", "exports the dev preview's contracts", /export \* from "\.\/dev-preview"/],
   ["apps/server/src/routes/api.ts", "the dev preview routes", /\.route\("\/dev-preview", devPreviewRoutes\(s\)\)/],
@@ -438,6 +442,9 @@ const CALL_SITES = [
   ["apps/web/src/routes/project.tsx", "the dev preview section of a project's settings", /<DevPreviewProjectSettings project=\{project\} \/>/],
   ["apps/web/src/routes/settings.tsx", "the dev preview limits in the app's settings", /render: \(\) => <DevPreviewLimitsSettings \/>/],
   ["apps/web/src/lib/api/http-client.ts", "the web client's dev preview calls", /devPreview: httpDevPreviewApi\(http\)/],
+  // --- A new project's scheduled starter automations: staggered start times, set where upstream creates the starter set
+  ["apps/server/src/services/automations/definitions.ts", "a new starter automation is created with the next free start time among the active projects' copies (as part of its creation, not as an edit)", /const trigger = staggeredStarterTrigger\(template, project, this\.deps\.projects\.list\(\), /, /this\.create\(\{ templateId: template\.id, projectId, enabled: enable, trigger \}, \{ id \}\)/],
+  ["apps/server/src/services/harden/starter-stagger.ts", "the rule itself: 10-minute steps, only plain minute and hour fields, never past midnight, archived projects and the project itself take no slot", "staggeredCron", "STAGGER_STEP_MINUTES = 10", "MINUTES_PER_DAY", /other\.id === project\.id \|\| other\.archivedAt !== null/],
   // --- OpenCode sessions: slash commands are plain prompts in this fork for now
   ["packages/providers/src/opencode/commands.ts", "the commands OpenCode lists pass the fork's switch before they are reported or routed", /commands = hardenListedCommands\(/],
   ["packages/providers/src/opencode/harden-commands.ts", "the switch itself, off in the product", "hardenListedCommands", /^let run = false;$/m],

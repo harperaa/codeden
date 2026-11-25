@@ -166,18 +166,16 @@ describe("the preview bar on a session", () => {
     expect(screen.getByTestId("dev-preview-switch")).toHaveProperty("disabled", false);
   });
 
-  it("shows nothing in a project with no dev command, and nothing on the orchestrator", async () => {
-    const session = vi.fn(async () => sessionState({ configured: false }));
-    renderWithClient(<DevPreviewBar session={agent} />, clientWith({ session }));
-    await waitFor(() => expect(session).toHaveBeenCalled());
-    expect(screen.queryByTestId("dev-preview-bar")).toBeNull();
-    expect(screen.queryByTestId("dev-preview-hint")).toBeNull();
+  it("shows nothing on the orchestrator, which has no project", async () => {
+    const session = vi.fn(async () => sessionState());
     const base = vi.fn(async () => baseState());
     renderWithClient(
       <DevPreviewBar session={{ ...agent, role: "orchestrator", projectId: null }} />,
       clientWith({ base, session }),
     );
     expect(base).not.toHaveBeenCalled();
+    expect(session).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("dev-preview-bar")).toBeNull();
   });
 });
 
@@ -206,19 +204,8 @@ describe("the preview bar on the PM thread", () => {
     fireEvent.click(await screen.findByTestId("dev-preview-switch"));
     await waitFor(() => expect(setPm).toHaveBeenCalledWith(PROJECT, false));
   });
-
-  it("is a quiet hint, and nothing else, until the project has a dev command", async () => {
-    renderWithClient(
-      <DevPreviewPmBar projectId={PROJECT} />,
-      clientWith({ base: async () => baseState({ configured: false }) }),
-      { withRouter: true },
-    );
-    expect((await screen.findByTestId("dev-preview-hint")).textContent).toBe(
-      "Set up a dev preview",
-    );
-    expect(screen.queryByTestId("dev-preview-switch")).toBeNull();
-  });
 });
+// A project with nothing stored yet: `dev-preview-switch.test.tsx`.
 
 describe("the project's dev preview settings", () => {
   const project = { id: PROJECT } as Parameters<typeof DevPreviewProjectSettings>[0]["project"];
@@ -267,7 +254,8 @@ describe("the project's dev preview settings", () => {
         portVars: ["PORT"],
         urlFrom: "port",
         urlPattern: null,
-        pmEnabled: true,
+        // Nobody switched "On the PM thread" on, so no preview starts by itself.
+        pmEnabled: false,
       }),
     );
   });

@@ -1,13 +1,13 @@
-import { existsSync, lstatSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   type DevPreviewRecommended,
   HARDEN_DEV_PREVIEW_SCRIPT,
-  HARDEN_WORKSPACE_PACKAGE,
   hardenDevPreviewRecommended,
   type Project,
   type Session,
 } from "@codeden/contracts";
+import { isHardenWorkspace, isPlainFile, rootPackage } from "../harden/checkout";
 
 /** Statuses in which an agent is at work: its preview is never stopped to make room. */
 const BUSY: ReadonlySet<Session["status"]> = new Set(["queued", "starting", "running", "waiting"]);
@@ -64,16 +64,6 @@ const RUNNERS: [lockfile: string, command: string][] = [
   ["bun.lockb", "bun run dev"],
 ];
 
-/** The project folder's `package.json`, or null when there is none that can be read. */
-function rootPackage(projectPath: string): { name?: unknown; scripts?: unknown } | null {
-  try {
-    const pkg: unknown = JSON.parse(readFileSync(join(projectPath, "package.json"), "utf8"));
-    return typeof pkg === "object" && pkg !== null ? pkg : null;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * A dev command to offer in the settings form. Only the fact that a `dev` script exists is
  * read from the repository: the suggested text is one of a few fixed commands, never a string
@@ -92,16 +82,13 @@ export function suggestDevCommand(projectPath: string): { command: string; reaso
 /**
  * Whole settings to offer when the project folder is a checkout of this product's own
  * repository: its root package has the workspace's name, and the repository's dev command for a
- * preview is there as a plain file (a link doesn't count). Those two facts are all that is read;
- * nothing is run, and the offered values are the app's own constants
- * (`hardenDevPreviewRecommended`), so no text from the repository reaches a command.
+ * preview is there as a plain file (a link doesn't count). Those two facts are all that is read
+ * (`../harden/checkout.ts`, the one place a checkout is recognised); nothing is run, and the
+ * offered values are the app's own constants (`hardenDevPreviewRecommended`), so no text from
+ * the repository reaches a command.
  */
 export function recommendDevPreview(projectPath: string): DevPreviewRecommended | null {
-  if (rootPackage(projectPath)?.name !== HARDEN_WORKSPACE_PACKAGE) return null;
-  try {
-    if (!lstatSync(join(projectPath, HARDEN_DEV_PREVIEW_SCRIPT)).isFile()) return null;
-  } catch {
-    return null;
-  }
+  if (!isHardenWorkspace(projectPath)) return null;
+  if (!isPlainFile(projectPath, HARDEN_DEV_PREVIEW_SCRIPT)) return null;
   return hardenDevPreviewRecommended();
 }

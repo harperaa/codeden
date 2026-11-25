@@ -141,7 +141,7 @@ describe("the dev preview of a Secure Foundation project", () => {
       portVars: ["PORT"],
       urlFrom: "output",
       urlPattern: null,
-      pmEnabled: true,
+      pmEnabled: false,
     });
     // The form takes exactly these values.
     expect(DevPreviewSettings.parse(offer.settings)).toEqual(offer.settings);
@@ -192,7 +192,7 @@ describe("the dev preview of a Secure Foundation project", () => {
       portVars: ["PORT"],
       urlFrom: "output",
       urlPattern: null,
-      pmEnabled: true,
+      pmEnabled: false,
     });
     expect(offer.secrets).toBe("env_local");
     const note = offer.notes.join(" ");

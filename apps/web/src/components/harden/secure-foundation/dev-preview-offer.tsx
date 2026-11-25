@@ -1,4 +1,8 @@
-import { type DevPreviewSettings, hardenDocsUrl } from "@codeden/contracts";
+import {
+  type DevPreviewSettings,
+  hardenDocsUrl,
+  type SecureFoundationDevPreview,
+} from "@codeden/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Fragment, useEffect } from "react";
@@ -19,13 +23,19 @@ export const DEV_PREVIEW_ANCHOR = "dev-preview";
  * other project, and on another device, `applies` is false.
  */
 export function useSecureFoundationDevPreview(projectId: string) {
+  return useSecureFoundationDevPreviewQuery(projectId).data;
+}
+
+/** The same as a query, for a reader that waits for the answer or only asks sometimes. */
+export function useSecureFoundationDevPreviewQuery(projectId: string, enabled = true) {
   const client = useClient();
   return useQuery({
     queryKey: [...secureFoundationKey, "dev-preview", projectId],
     queryFn: () => client.secureFoundation.devPreview(projectId),
     staleTime: 60_000,
     retry: false,
-  }).data;
+    enabled,
+  });
 }
 
 /** Text in which `backticks` mark a command, a name or a path. */
@@ -134,6 +144,19 @@ export function SecureFoundationDevPreviewNotes({
           </button>
         )}
       </p>
+      <SecureFoundationDevPreviewTodo offer={offer} />
+    </div>
+  );
+}
+
+/**
+ * What stays for the person to do with a Secure Foundation project's preview (copying
+ * `.env.local`, keeping Convex running), as the server wrote it, and the guide. The settings
+ * form and the confirmation a thread's switch opens both show it from here.
+ */
+export function SecureFoundationDevPreviewTodo({ offer }: { offer: SecureFoundationDevPreview }) {
+  return (
+    <>
       <ul className="list-disc space-y-1 pl-4 text-muted-foreground">
         {offer.notes.map((note) => (
           <li key={note}>
@@ -154,6 +177,6 @@ export function SecureFoundationDevPreviewNotes({
       >
         Dev previews of a Secure Foundation project
       </a>
-    </div>
+    </>
   );
 }

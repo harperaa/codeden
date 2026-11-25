@@ -1,0 +1,5 @@
+---
+section: added
+---
+
+- **The two upstream-sync review automations ship with the app.** A project that is a checkout of CodeHarden or of a fork of it now gets **Daily upstream sync: first review** (every day 09:00: builds the `sync/` branch, reviews it, runs the checks, opens the pull request and proposes a label) and **Daily upstream sync: second review** (11:00 and 15:00: an independent check in a separate session, the only one that sets `sync-approved`), in the npm package and the desktop app alike. Both arrive **switched off**, because they run at the Auto level, push a branch and label pull requests: read them and switch each one on in the project's Automations. **Enable starter set** leaves them off, and no other project gets them. If you already made them by hand with the work keys `automation:upstream-sync-review` and `automation:upstream-sync-second-review`, nothing is added beside yours and no review runs twice; delete yours to get the shipped one in its place, switched off. See "The two review automations" in `docs/codeharden-sync-cooldown.md`.

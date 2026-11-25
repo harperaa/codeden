@@ -68,12 +68,17 @@ export function httpDevPreviewApi(http: Fetcher): DevPreviewApi {
 
 /**
  * The mock client keeps settings in memory and "runs" a preview at once, so the UI can be
- * worked on without a server. Nothing is started.
+ * worked on without a server. Nothing is started. `world` says which project a session is in
+ * and which projects have a `dev` script to suggest a command for (all of them without it).
  */
-export function mockDevPreviewApi(): DevPreviewApi {
+export function mockDevPreviewApi(
+  world: {
+    projectOf?: (sessionId: string) => string | null | undefined;
+    hasDevScript?: (projectId: string) => boolean;
+  } = {},
+): DevPreviewApi {
   let limits = defaultDevPreviewLimits();
   const configs = new Map<string, DevPreviewConfig>();
-  const sessions = new Map<string, string>();
   const running = new Set<string>();
   let nextPort = limits.portFrom;
   const ports = new Map<string, number>();
@@ -103,9 +108,10 @@ export function mockDevPreviewApi(): DevPreviewApi {
   const view = (projectId: string): DevPreviewProject => ({
     projectId,
     config: configs.get(projectId) ?? null,
-    suggestion: configs.has(projectId)
-      ? null
-      : { command: "pnpm dev", reason: "package.json has a dev script" },
+    suggestion:
+      configs.has(projectId) || world.hasDevScript?.(projectId) === false
+        ? null
+        : { command: "pnpm dev", reason: "package.json has a dev script" },
     recommended: null,
     baseBranch: "main",
     notice: null,
@@ -118,7 +124,7 @@ export function mockDevPreviewApi(): DevPreviewApi {
     } else running.delete(key);
   };
   const sessionState = (sessionId: string) =>
-    state(devPreviewSessionKey(sessionId), sessions.get(sessionId) ?? "p-mock", sessionId);
+    state(devPreviewSessionKey(sessionId), world.projectOf?.(sessionId) ?? "p-mock", sessionId);
   return {
     limits: async () => ({ limits, remote: false }),
     setLimits: async (value) => {

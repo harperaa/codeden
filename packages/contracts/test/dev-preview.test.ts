@@ -33,8 +33,13 @@ describe("dev preview contracts", () => {
       portVars: ["PORT"],
       urlFrom: "port",
       urlPattern: null,
-      pmEnabled: true,
+      // Off unless a person chose it: no preview starts by itself.
+      pmEnabled: false,
     });
+    // A stored "on" is the person's choice and stays on.
+    expect(roundTrip(DevPreviewSettings, { command: "pnpm dev", pmEnabled: true }).pmEnabled).toBe(
+      true,
+    );
     const full = {
       command: "node dev.mjs --port {port}",
       prepareCommand: "pnpm install --frozen-lockfile",
