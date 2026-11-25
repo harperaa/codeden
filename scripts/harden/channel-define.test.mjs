@@ -21,6 +21,7 @@ import {
   DEFAULT_TEMPLATE_BRANCH,
   DEFAULT_TEMPLATE_REPOSITORY,
   hardenChannelDefine,
+  isReleasePack,
   readHardenChannel,
   repositoryOfRemote,
   slugOfPackage,
@@ -245,5 +246,38 @@ describe("the build-time update channel", () => {
     expect(
       readHardenChannel({ PACKAGE_NAME: "example-harden" }, { ...FORK, strict: true }),
     ).toMatchObject({ packageName: "example-harden", repository: "example/example-harden" });
+  });
+
+  it("is strict when the environment says a release is packed (the desktop installers)", () => {
+    const PACK = { HARDEN_RELEASE_PACK: "1" };
+    // A fork that has not named its package: refused, with what to do.
+    expect(() => readHardenChannel(PACK, FORK)).toThrow(
+      /PACKAGE_NAME is not set.*example\/example-harden.*setup-fork\.sh/,
+    );
+    expect(() => readHardenChannel(PACK, { origin: null })).toThrow(/PACKAGE_NAME/);
+    expect(() =>
+      readHardenChannel({ ...PACK, PACKAGE_NAME: "example-harden" }, FORK),
+    ).not.toThrow();
+    expect(() =>
+      readHardenChannel({ ...PACK, PACKAGE_NAME: "example-harden" }, { origin: null }),
+    ).toThrow(/RELEASE_REPOSITORY/);
+    // CodeHarden's own checkout, and what its installer workflow passes, resolve as ever.
+    expect(readHardenChannel(PACK, OWN)).toEqual(readHardenChannel({}, OWN));
+    const workflow = { PACKAGE_NAME: "codeharden", RELEASE_REPOSITORY: "harperaa/codeharden" };
+    for (const origin of [OWN.origin, null]) {
+      expect(readHardenChannel({ ...PACK, ...workflow }, { origin })).toEqual(
+        readHardenChannel({}, OWN),
+      );
+    }
+    // Off unless it says 1; an explicit option wins; anything else is an error, not a "no".
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    for (const off of [{}, { HARDEN_RELEASE_PACK: "" }, { HARDEN_RELEASE_PACK: "0" }]) {
+      expect(isReleasePack(off)).toBe(false);
+      expect(readHardenChannel(off, FORK).packageName).toBe("codeharden");
+    }
+    expect(readHardenChannel(PACK, { ...FORK, strict: false }).packageName).toBe("codeharden");
+    expect(() => readHardenChannel({ HARDEN_RELEASE_PACK: "true" }, OWN)).toThrow(
+      /HARDEN_RELEASE_PACK must be 1, 0 or unset/,
+    );
   });
 });

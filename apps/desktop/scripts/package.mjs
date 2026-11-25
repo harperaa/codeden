@@ -11,6 +11,12 @@
 // for every target architecture), then run electron-builder on the stage. pnpm's symlinked
 // node_modules never reach the app.
 //
+// Installers are a release: a run without --dir sets HARDEN_RELEASE_PACK
+// (scripts/harden/channel-define.mjs) before the channel is read and the builder configuration
+// is loaded, so in a fork that has not set PACKAGE_NAME it stops here, before anything is
+// staged, instead of packing the fork's app with CodeHarden's update channel. --dir (tests,
+// `pnpm desktop:build`) only warns there, as every ordinary build does.
+//
 // The staged package.json carries the product's identity and the CodeHarden version in its npm
 // form (`VERSION`, zeros stripped: valid semver, and what the update feed compares). The
 // repository's package.json keeps upstream's name and version.
@@ -20,10 +26,12 @@ import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { Arch, build, Platform } from "electron-builder";
-import { readHardenChannel } from "../../../scripts/harden/channel-define.mjs";
+import {
+  RELEASE_PACK_VARIABLE,
+  readHardenChannel,
+} from "../../../scripts/harden/channel-define.mjs";
 import { npmVersion } from "../../../scripts/harden/npm-release.mjs";
 import { readHardenVersion } from "../../../scripts/harden/version-define.mjs";
-import config, { keyringBinary } from "../electron-builder.config.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const { values } = parseArgs({
@@ -35,7 +43,11 @@ const { values } = parseArgs({
 });
 const archs = values.arch?.length ? values.arch : [process.arch];
 const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+if (!values.dir) process.env[RELEASE_PACK_VARIABLE] = "1";
 const channel = readHardenChannel();
+// Loaded here, not imported on top: the configuration reads the channel when it loads, and
+// must read it under the same signal.
+const { default: config, keyringBinary } = await import("../electron-builder.config.mjs");
 const require = createRequire(join(root, "package.json"));
 const electronVersion = JSON.parse(
   readFileSync(require.resolve("electron/package.json"), "utf8"),

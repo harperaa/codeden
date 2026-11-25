@@ -14,11 +14,20 @@ export function slugOfPackage(packageName: string): string;
 export interface HardenChannelOptions {
   /** The checkout's `owner/repo`; default: read from the `origin` remote. `null`: none. */
   origin?: string | null;
-  /** Packing a release: throw instead of using CodeHarden's names in another repository. */
+  /**
+   * Packing a release: throw instead of using CodeHarden's names in another repository.
+   * Default: what the environment says (`isReleasePack`).
+   */
   strict?: boolean;
   /** Don't print the warning an ordinary build gives in another repository. */
   quiet?: boolean;
 }
+
+/** The variable that says a release is being packed: `HARDEN_RELEASE_PACK`. */
+export const RELEASE_PACK_VARIABLE: string;
+
+/** Whether `env` says a release is being packed (`1`); throws on anything but `1`, `0` or unset. */
+export function isReleasePack(env?: Record<string, string | undefined>): boolean;
 
 /** The `owner/repo` of a github.com remote URL, or null. */
 export function repositoryOfRemote(url: string | null | undefined): string | null;
