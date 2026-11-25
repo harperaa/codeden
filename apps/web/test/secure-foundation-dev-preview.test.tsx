@@ -93,12 +93,12 @@ describe("the dev preview settings of a Secure Foundation project", () => {
     expect(notes).toContain("npm run convex:doppler");
     expect(notes).toContain("Convex runs separately");
 
-    // The filled form's button is the green start, and it is enabled without an edit. It shows
-    // the exact commands and asks; still nothing stored.
+    // The filled form's button is enabled without an edit. It is a plain Save…: the PM thread's
+    // preview is off until the person switches it on. It shows the exact commands and asks;
+    // still nothing stored.
     const start = screen.getByTestId("dev-preview-save") as HTMLButtonElement;
-    expect(start.textContent).toBe("Start preview…");
+    expect(start.textContent).toBe("Save…");
     expect(start.disabled).toBe(false);
-    expect(start.className).toContain("bg-status-done");
     fireEvent.click(start);
     const dialog = await screen.findByTestId("dev-preview-confirm");
     expect(dialog.textContent).toContain("Run these commands on this computer?");
@@ -120,7 +120,7 @@ describe("the dev preview settings of a Secure Foundation project", () => {
       portVars: ["PORT"],
       urlFrom: "output",
       urlPattern: null,
-      pmEnabled: true,
+      pmEnabled: false,
     });
   });
 

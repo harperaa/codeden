@@ -21,7 +21,7 @@ describe("the recommended dev preview settings of this repository", () => {
       portVars: ["WEB_PORT", "API_PORT"],
       urlFrom: "port",
       urlPattern: null,
-      pmEnabled: true,
+      pmEnabled: false,
     });
     expect(roundTrip(DevPreviewSettings, settings)).toEqual(settings);
     expect(devPreviewPortCount(settings)).toBe(2);

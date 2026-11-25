@@ -19,13 +19,19 @@ export const DEV_PREVIEW_ANCHOR = "dev-preview";
  * other project, and on another device, `applies` is false.
  */
 export function useSecureFoundationDevPreview(projectId: string) {
+  return useSecureFoundationDevPreviewQuery(projectId).data;
+}
+
+/** The same as a query, for a reader that waits for the answer or only asks sometimes. */
+export function useSecureFoundationDevPreviewQuery(projectId: string, enabled = true) {
   const client = useClient();
   return useQuery({
     queryKey: [...secureFoundationKey, "dev-preview", projectId],
     queryFn: () => client.secureFoundation.devPreview(projectId),
     staleTime: 60_000,
     retry: false,
-  }).data;
+    enabled,
+  });
 }
 
 /** Text in which `backticks` mark a command, a name or a path. */

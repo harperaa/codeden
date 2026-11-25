@@ -35,7 +35,8 @@ export function hardenDevPreviewSettings(): DevPreviewSettings {
     portVars: ["WEB_PORT", "API_PORT"],
     urlFrom: "port",
     urlPattern: null,
-    pmEnabled: true,
+    // Off until a person switches it on, like every preview.
+    pmEnabled: false,
   };
 }
 

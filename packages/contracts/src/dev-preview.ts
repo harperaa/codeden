@@ -91,8 +91,12 @@ export const DevPreviewSettings = z.object({
   urlFrom: z.enum(["port", "output"]).default("port"),
   /** With `urlFrom: "output"`, the pattern to match; null takes the first local URL printed. */
   urlPattern: DevPreviewUrlPattern.nullable().default(null),
-  /** Start a preview of the base branch for the PM thread. A person can switch it off. */
-  pmEnabled: z.boolean().default(true),
+  /**
+   * Run a preview of the base branch for the PM thread. Off unless a person switched it on (the
+   * switch at the top of the PM thread, or "On the PM thread" in the settings): no preview
+   * starts by itself for a project that never chose it.
+   */
+  pmEnabled: z.boolean().default(false),
 });
 export type DevPreviewSettings = z.infer<typeof DevPreviewSettings>;
 

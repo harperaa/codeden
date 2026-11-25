@@ -6,14 +6,26 @@ Every agent session works in a worktree of its own, so a dev server you started 
 
 There are two kinds:
 
-- **A session's preview**, off by default. A switch at the top of the session turns it on.
-- **The PM thread's preview**, on by default once the project has a dev command. It shows the project's **base branch** (the project's own default branch, whatever it is called), from a checkout the app keeps for this, and follows the branch as it moves.
+- **A session's preview.** A switch at the top of the session turns it on.
+- **The PM thread's preview.** A switch at the top of the PM thread turns it on. It shows the project's **base branch** (the project's own default branch, whatever it is called), from a checkout the app keeps for this, and follows the branch as it moves.
 
-Nothing runs for a project until you have set it up.
+Both are **off until you switch them on**, and the switch is at the top of every PM thread and every session, whether or not the project is set up yet. Nothing runs for a project until you have confirmed its commands on this computer.
+
+## Switch it on
+
+Turn on **Dev preview** at the top of a thread.
+
+| The project | What the switch does |
+|---|---|
+| Has confirmed settings | Starts that thread's preview. |
+| Has none, and the app can suggest settings for it | Shows the suggested dev command, prepare command, port variables and where the link comes from, and asks **Run these commands on this computer?** **Save and allow** stores them and starts that thread's preview. **Cancel** stores nothing and leaves the switch off. **Edit settings** opens the project's settings, where you can change them first. |
+| Has none, and the app has nothing to suggest | The strip says **Needs a dev command first**, and the switch opens the project's **Settings**, **Dev preview**. The app doesn't guess a command. |
+
+The app can suggest settings for a checkout of [this repository](#this-repository-codeharden-itself), for a [Secure Foundation project](#secure-foundation-projects), and for a project with a `dev` script (the dev command only: `pnpm dev`, `yarn dev`, `bun run dev` or `npm run dev`, by the lockfile it finds; the dialog says when there is no prepare command, which a fresh worktree usually needs). The suggested text is the app's own, never the repository's, and the question is the same one the settings ask: it is asked once per project, and again whenever the commands change. Settings stored from a session's switch leave the PM thread's preview off; stored from the PM thread's switch, they switch it on.
 
 ## Set it up
 
-Open the project, **Settings**, **Dev preview**.
+Open the project, **Settings**, **Dev preview**. This is also where you change what is stored.
 
 | Field | What it is |
 |---|---|
@@ -21,7 +33,7 @@ Open the project, **Settings**, **Dev preview**.
 | Prepare command | Optional. Run before the first start in a worktree, and again when a lockfile there changes: `pnpm install --frozen-lockfile`, `npm ci`, `bundle install`. A new worktree has no installed dependencies, so most projects need one. |
 | Port variables | The environment variables the app puts the ports in. `PORT` by default. Name up to four, separated by commas, for a project that needs more than one port; each gets its own free port, and the first is the page the link opens. A name is upper case with `PORT` in it (`PORT`, `WEB_PORT`, `VITE_PORT`); other names are refused. |
 | Link | **First port**: `http://localhost:<the first port>`. **From the output**: the first local URL the dev command prints, for dev servers that choose their own port. A pattern (a regular expression whose first group is the URL) narrows that down. An address on one of the app's own ports is never taken. |
-| On the PM thread | Whether a preview of the base branch runs for the PM thread. On by default; your choice is kept. |
+| On the PM thread | Whether a preview of the base branch runs for the PM thread. Off until you switch it on, here or with the switch on the PM thread; your choice is kept. A project that was set up while this was on by default keeps it on. |
 
 If the project has a `dev` script, the form offers a command to fill in (`pnpm dev`, `yarn dev`, `bun run dev` or `npm run dev`, by the lockfile it finds). That only fills the field. Two kinds of project open with the whole form filled in: a checkout of [this repository](#this-repository-codeharden-itself) and a [Secure Foundation project](#secure-foundation-projects).
 
@@ -29,12 +41,12 @@ The button under the form says what it will do:
 
 | The form | The button |
 |---|---|
-| Nothing stored yet, and the fields hold a command (typed, or filled in for you) | **Start preview…**, in green. With **On the PM thread** switched off it is **Save…**, since nothing would start. |
+| Nothing stored yet, and the fields hold a command (typed, or filled in for you) | **Save…**: it stores the commands and starts nothing, and a preview starts from the switch on a thread. With **On the PM thread** switched on it is **Start preview…**, in green, and the PM thread's preview starts with the save. |
 | Stored, and you changed something | **Save changes…** |
 | Stored and unchanged | No save button: there is nothing to save. The row says **Confirmed** and when, and how the PM thread's preview is doing. When that preview isn't running (stopped, failed, waiting for you), **Restart** or **Start preview** starts it right there, with the commands you already confirmed, exactly like **Restart** on the PM thread. When it can't be started from there, the row says why (the PM thread's preview is switched off, the project has no base branch). |
 | Stored and unchanged, but the project's base branch changed since | **Confirm again…** |
 
-**Start preview…**, **Save…**, **Save changes…** and **Confirm again…** all show the exact commands and the base branch first, and ask **Run these commands on this computer?** Only after **Save and allow** are they stored, and only then can a preview start; **Cancel** stores nothing. There is no way around that question: a command runs only after you confirmed it on this computer. Space around a command and the way port variables are separated are not kept, so they don't count as a change. Changing a command later asks again; previews that were running stop, the PM thread's starts again with the new commands, and a session's starts when you turn it on again. **Remove** forgets the commands, stops the project's previews and takes the base branch's checkout away, with the installed dependencies and build output in it. The checkout is kept, and you are told, when it has changes, untracked files, or an ignored file that can't be made again (an `.env.local` you put there). Archiving a project does the same as Remove.
+**Start preview…**, **Save…**, **Save changes…** and **Confirm again…** all show the exact commands and the base branch first, and ask **Run these commands on this computer?** Only after **Save and allow** are they stored, and only then can a preview start; **Cancel** stores nothing. There is no way around that question: a command runs only after you confirmed it on this computer. Space around a command and the way port variables are separated are not kept, so they don't count as a change. Changing a command later asks again; previews that were running stop, the PM thread's starts again with the new commands when it is switched on, and a session's starts when you turn it on again. **Remove** forgets the commands, stops the project's previews and takes the base branch's checkout away, with the installed dependencies and build output in it. The checkout is kept, and you are told, when it has changes, untracked files, or an ignored file that can't be made again (an `.env.local` you put there). Archiving a project does the same as Remove.
 
 ### Ports in the command
 
@@ -57,7 +69,7 @@ vite --port {port} --strictPort
 | Port variables | `WEB_PORT, API_PORT` |
 | Link | First port |
 
-There is nothing to type: press **Start preview…** and then **Save and allow**. That is the same confirmation as for every project, and nothing is stored or run before it. **Set up a dev preview** on the PM thread opens the settings in this state. You can change every field before you save; **Fill them in** puts the values back.
+There is nothing to type, and no need to open the settings: switch **Dev preview** on at the top of a thread and press **Save and allow**. In the settings, the same values are stored with **Save…** and then **Save and allow**. Either way it is the same confirmation as for every project, and nothing is stored or run before it. You can change every field before you save; **Fill them in** puts the values back.
 
 The values are the app's own, not the repository's. The app looks at the project folder only to decide whether to offer them: the root `package.json` has this workspace's name, and `scripts/harden/dev-preview/run.mjs` is there as a file. It reads nothing else for this, runs nothing, and takes no text from either file into a command. Another device is offered nothing.
 
@@ -76,7 +88,7 @@ A project that [Secure Foundation](secure-foundation.md) created needs more than
 | Port variables | `PORT` |
 | Link | From the output |
 
-Check the values, press **Start preview…** and then **Save and allow**. That is the same confirmation as for every project, and nothing is stored or run before it. The values are a suggestion and only fill the form: the app builds them from the name you gave the project in the Secure Foundation form, which it kept in its home (`secure-foundation.json`) when it created the project. They are not read from the repository, and Secure Foundation never stores a dev preview's commands itself. You can change every field before you save. When a dev preview is already set up, nothing is changed; **Fill them in** in the settings puts the values into the form again.
+Check the values, press **Save…** and then **Save and allow**; a preview then starts from the switch at the top of a thread. Switching **Dev preview** on at the top of a thread before anything is stored offers the same values in the same question. That is the same confirmation as for every project, and nothing is stored or run before it. When nothing could be filled in for the project (its name is not a plain one), the switch opens these settings instead. The values are a suggestion and only fill the form: the app builds them from the name you gave the project in the Secure Foundation form, which it kept in its home (`secure-foundation.json`) when it created the project. They are not read from the repository, and Secure Foundation never stores a dev preview's commands itself. You can change every field before you save. When a dev preview is already set up, nothing is changed; **Fill them in** in the settings puts the values into the form again.
 
 Why these values:
 
@@ -94,7 +106,8 @@ Why these values:
 
 | It shows | Meaning |
 |---|---|
-| The switch, off | No preview. Turn it on to start one. |
+| The switch, off | No preview. Turn it on to start one; in a project with nothing stored yet it asks first ([Switch it on](#switch-it-on)). |
+| **Needs a dev command first** | The project has no dev preview settings and the app has none to suggest. **Set up a dev preview**, or the switch, opens the project's settings. |
 | **Preparing** | The prepare command is running in the session's worktree. |
 | **Starting** | The dev command is running; nothing answers on its port yet. |
 | **Running** and a link | Something answers on the port. The link opens it. |
@@ -107,9 +120,11 @@ The link appears only once something is actually listening: the app tries the po
 
 The preview keeps running while the agent works, whatever the agent restarts. If the dev command exits by itself, the app starts it again **once**; if it exits again, the preview says so and waits for you. It stops when you switch it off, when the session is stopped, fails or is archived, when its worktree is cleaned up, and when the app quits.
 
-The switch is disabled, with the reason, where a preview has nowhere to run: a session that works in the project folder instead of a worktree of its own (projects that aren't git repositories), a read-only session, a session in a sandbox, and a session that is stopped.
+The strip is one row under the thread's header, the same on a session and on the PM thread. The switch is disabled, with the reason, on another device (which sees the state and the log and can stop a preview) and where a preview has nowhere to run: a session that works in the project folder instead of a worktree of its own (projects that aren't git repositories), a read-only session, a session in a sandbox, and a session that is stopped.
 
 ## On the PM thread
+
+The PM thread's preview is off until you switch it on, with the switch at the top of the PM thread or with **On the PM thread** in the settings. Once on, it stays on (it comes back when the app starts) until you switch it off.
 
 The base branch's preview runs from **a checkout of its own**, inside the app's home (`dev-preview/base/<project>`). It is never your project folder, and never a session's worktree.
 
@@ -119,7 +134,7 @@ The base branch's preview runs from **a checkout of its own**, inside the app's 
 - It follows **the branch you confirmed**. Saving the settings records the project's base branch at that moment, and the dialog names it. If the project's base branch is changed later (the orchestrator can change it, and so can project settings opened from another device), the preview stops and says so, and runs nothing from the new branch until you confirm the dev preview settings again on this computer (**Confirm again…** in the project's settings).
 - The app's own git commands in your project run without the repository's git hooks, and never prune or remove your other worktrees.
 - The checkout only ever moves forward. If it can't be fast-forwarded, because someone committed in it, edited a file that the update would overwrite, or the branch was rewritten, the preview **stops with a message** and the checkout is left exactly as it is. The app never resets it, discards anything or deletes it. Sort the folder out (or move it away) and press **Update now**.
-- A project with no dev command shows **Set up a dev preview** on the PM thread and nothing else. It opens the project's settings at **Dev preview**.
+- A project with no dev command shows the switch, off, like every other. Switching it on asks with the settings the app can suggest, or opens the project's settings at **Dev preview** when it has none to suggest ([Switch it on](#switch-it-on)).
 
 ## Limits
 
@@ -134,7 +149,7 @@ The base branch's preview runs from **a checkout of its own**, inside the app's 
 Read this before you set a project up: a dev preview runs the project's code on your computer.
 
 - **It runs the repository's code as you, with no approvals.** A session's agent works under the permission level you gave it; a preview doesn't. The dev command runs the project's dev script, and the prepare command runs the install scripts of the project's dependencies, with everything your user account can read and reach, the app's own files included. That goes for code an agent wrote in a session's worktree, the moment you turn that session's preview on. Turn a preview on for code you would run yourself.
-- **Only commands you confirmed.** The dev and prepare commands are the ones you typed and confirmed in the project's settings. They are never read from the repository: not from `package.json`, not from `.codeden/project.json`, not from anything a branch or a pull request can change. A project you added from a repository you don't trust can't run anything through this feature until you type and confirm a command for it. Remember that the command then runs that repository's code: `pnpm dev` runs whatever its `dev` script says, in every worktree, including a session's branch that an agent wrote, and on the PM thread whatever is merged into the base branch, as soon as it is merged. For a checkout of this repository the form starts filled in with values that are fixed in the app ([above](#this-repository-codeharden-itself)): the repository decides only whether they are offered, never what they say, and they are stored by the same **Save and allow**. For a project Secure Foundation created, the form starts filled in too ([above](#secure-foundation-projects)): those values come from your own answers in the setup form, not from the repository, and they are stored by the same **Save and allow** as anything you type. The names they are built from are kept in the app's home (`secure-foundation.json`), behind the same guard as the commands; an agent that got past it could change which Doppler project the form suggests, so read the command in the dialog before you allow it. Only a plain name is ever put into a suggested command.
+- **Only commands you confirmed.** The dev and prepare commands are the ones you confirmed on this computer: typed in the project's settings, or the app's own suggestion shown to you when you switched a preview on. They are never read from the repository: not from `package.json`, not from `.codeden/project.json`, not from anything a branch or a pull request can change. A project you added from a repository you don't trust can't run anything through this feature until you type and confirm a command for it. Remember that the command then runs that repository's code: `pnpm dev` runs whatever its `dev` script says, in every worktree, including a session's branch that an agent wrote, and on the PM thread whatever is merged into the base branch, as soon as it is merged. For a checkout of this repository the form starts filled in with values that are fixed in the app ([above](#this-repository-codeharden-itself)): the repository decides only whether they are offered, never what they say, and they are stored by the same **Save and allow**. For a project Secure Foundation created, the form starts filled in too ([above](#secure-foundation-projects)): those values come from your own answers in the setup form, not from the repository, and they are stored by the same **Save and allow** as anything you type. The names they are built from are kept in the app's home (`secure-foundation.json`), behind the same guard as the commands; an agent that got past it could change which Doppler project the form suggests, so read the command in the dialog before you allow it. Only a plain name is ever put into a suggested command.
 - **Only on this computer.** With network access on, a phone or another device sees a preview's state, its address and its log, and can stop it. It can't set or change a command, change the limits, start a session's preview, or switch on or update the PM thread's. The address is `localhost`, so it only opens on the computer running the app.
 - **Only a person.** There is no agent tool for any of this. A session's preview starts only from your click on its switch, and never by itself: not when the session starts, not when the app restarts. An agent can't turn a preview on and can't change the command. The commands aren't part of the project's own settings, so the orchestrator's and PMs' project tools can't reach them, and the branch the PM thread's preview follows is the one you confirmed (above). They are stored in a file in the app's home (`dev-preview.json`), which agents are kept out of by the same guard as the app's other files; that guard has known gaps, listed under Permissions in [Security](security.md), and an agent that got past it could plant a command there.
 - **Like your terminal, without the keyboard.** The command is handed whole to your own shell, in the worktree, with your environment minus the app's own variables. Nothing is added to the command text except the port numbers described above. Unlike a terminal, the command has no input and its output is not a terminal: nobody can answer a question it asks (see [Troubleshooting](#troubleshooting)).
@@ -164,7 +179,7 @@ Read this before you set a project up: a dev preview runs the project's code on 
 - Previews run on the computer the app runs on. Sessions in a sandbox (Docker) have none.
 - A prepare command that hasn't finished after 15 minutes is ended, and the preview fails.
 - The prepare command runs again when a lockfile at the root of the worktree changes (`pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `bun.lock`, `Cargo.lock`, `go.sum`, `Gemfile.lock` and the like), or when you change the command. A session's preview checks when it starts; the PM thread's also after every update.
-- A session's preview is off again after the app restarts; the PM thread's comes back by itself.
+- A session's preview is off again after the app restarts; the PM thread's comes back by itself when you had switched it on.
 - After a crash of the app, leftovers are found through the dev command's own process. If that process died too and only what it started lives on, the app can't prove those are its own and leaves them for you to end. On Windows nothing is cleaned up after a crash.
 - The UI asks for a preview's state every few seconds while a thread is open, so a change can take a moment to show.
 - Windows: previews start and stop there, but this version was only tested on macOS.

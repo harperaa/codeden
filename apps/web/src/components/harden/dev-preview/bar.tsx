@@ -8,13 +8,13 @@ import { ExternalLink, RefreshCw, ScrollText } from "lucide-react";
 import { useState } from "react";
 import { lazyComponent } from "@/components/common/lazy-component";
 import { StatusDot } from "@/components/common/status-dot";
-import { DEV_PREVIEW_ANCHOR } from "@/components/harden/secure-foundation/dev-preview-offer";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Tone } from "@/lib/format";
 import { platform } from "@/lib/platform";
 import { cn } from "@/lib/utils";
+import { devPreviewSettingsHref as settingsHref, useDevPreviewSetup } from "./setup";
 import { type PreviewTarget, useDevPreview } from "./use-dev-preview";
 
 /** The log viewer loads when someone opens it. */
@@ -43,15 +43,10 @@ const TONE: Record<DevPreviewStatus, Tone> = {
 const REMOTE = "Previews are started on the computer running the app.";
 
 /**
- * The project's dev preview settings. A plain link: the strip also renders where there is no
- * router around it.
- */
-const settingsHref = (projectId: string) =>
-  `/projects/${encodeURIComponent(projectId)}?tab=settings#${DEV_PREVIEW_ANCHOR}`;
-
-/**
  * The strip under a thread's header: a session's own dev preview, or on the PM thread the
- * preview of the project's base branch. Nothing shows for a thread without a project.
+ * preview of the project's base branch. It is there for every project, set up or not, and
+ * always off until a person switches it on; in a project with nothing stored yet the switch
+ * asks first (`setup.tsx`). Nothing shows for a thread without a project.
  */
 export function DevPreviewBar({ session }: { session: Session }) {
   if (!session.projectId) return null;
@@ -72,25 +67,9 @@ export function DevPreviewPmBar({ projectId }: { projectId: string | null }) {
 function DevPreviewStrip(target: PreviewTarget) {
   const { state, turn, restart } = useDevPreview(target);
   const [logOpen, setLogOpen] = useState(false);
+  const setup = useDevPreviewSetup(target, state);
   if (!state) return null;
   const base = target.sessionId === null;
-  if (!state.configured) {
-    // Quiet on purpose: a hint on the PM thread, nothing at all on a session.
-    if (!base) return null;
-    return (
-      <div
-        data-testid="dev-preview-hint"
-        className="flex h-8 shrink-0 items-center gap-2 border-b border-border/70 px-4 text-2xs text-muted-foreground"
-      >
-        <a
-          href={settingsHref(target.projectId)}
-          className="underline-offset-2 hover:text-foreground hover:underline"
-        >
-          Set up a dev preview
-        </a>
-      </div>
-    );
-  }
   // This repository's own dev command says so when a port variable is missing: the fix is in
   // the settings, which offer the right ones.
   const portsMissing =
@@ -112,8 +91,11 @@ function DevPreviewStrip(target: PreviewTarget) {
                 aria-label={base ? "Dev preview of the base branch" : "Dev preview"}
                 data-testid="dev-preview-switch"
                 checked={state.enabled}
-                disabled={busy || blocked !== null}
-                onCheckedChange={(on) => turn.mutate(on)}
+                disabled={busy || blocked !== null || setup.loading}
+                // Nothing stored for the project yet: ask first, or lead to the settings.
+                onCheckedChange={(on) =>
+                  on && !state.configured ? setup.begin() : turn.mutate(on)
+                }
               />
               <span className="font-medium text-foreground/80">Dev preview</span>
             </span>
@@ -144,6 +126,20 @@ function DevPreviewStrip(target: PreviewTarget) {
           >
             Check the port variables in the settings
           </a>
+        )}
+        {setup.needsCommand && (
+          <>
+            <span className="text-muted-foreground" data-testid="dev-preview-needs-command">
+              Needs a dev command first.
+            </span>
+            <a
+              href={settingsHref(target.projectId)}
+              className="shrink-0 underline underline-offset-2 hover:text-foreground"
+              data-testid="dev-preview-hint"
+            >
+              Set up a dev preview
+            </a>
+          </>
         )}
         {blocked && !state.message && (
           <span
@@ -190,6 +186,7 @@ function DevPreviewStrip(target: PreviewTarget) {
         </pre>
       )}
       {logOpen && <LogDialog previewKey={state.key} onClose={() => setLogOpen(false)} />}
+      {setup.dialog}
     </div>
   );
 }

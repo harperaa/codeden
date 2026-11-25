@@ -83,16 +83,19 @@ describe("nothing stored yet", () => {
   it("has nothing to confirm in a form nobody touched", async () => {
     show({ project: async () => view() });
     await screen.findByTestId("dev-preview-command");
-    expect(button().textContent).toBe("Start preview…");
+    // "On the PM thread" is off until the person chooses it, so saving would start nothing.
+    expect(field("dev-preview-pm").getAttribute("aria-checked")).toBe("false");
+    expect(button().textContent).toBe("Save…");
     expect(button().disabled).toBe(true);
     expect(screen.queryByTestId("dev-preview-start")).toBeNull();
     expect(screen.getByTestId("dev-preview-confirmed").textContent).toMatch(/Nothing runs until/);
   });
 
-  it("a filled form gets a green Start preview… that always asks first", async () => {
+  it("with the PM thread switched on, a filled form gets a green Start preview… that always asks first", async () => {
     const { confirmProject, updateBase } = show({ project: async () => view() });
     await screen.findByTestId("dev-preview-command");
     type("dev-preview-command", "pnpm dev");
+    fireEvent.click(screen.getByTestId("dev-preview-pm"));
     expect(button().textContent).toBe("Start preview…");
     expect(button().disabled).toBe(false);
     expect(button().className).toContain("bg-status-done");
@@ -127,11 +130,10 @@ describe("nothing stored yet", () => {
     expect(updateBase).not.toHaveBeenCalled();
   });
 
-  it("is a plain Save… when the PM thread's preview is switched off: nothing would start", async () => {
+  it("is a plain Save… as long as nobody switched the PM thread's preview on: nothing would start", async () => {
     const { confirmProject } = show({ project: async () => view() });
     await screen.findByTestId("dev-preview-command");
     type("dev-preview-command", "pnpm dev");
-    fireEvent.click(screen.getByTestId("dev-preview-pm"));
     expect(button().textContent).toBe("Save…");
     expect(button().className).not.toContain("bg-status-done");
     fireEvent.click(button());
@@ -210,7 +212,7 @@ describe("stored and unchanged", () => {
       "the PM thread's preview is switched off",
       { ...stored, pmEnabled: false },
       base({ status: "off", enabled: false, url: null }),
-      /switched off\. Switch on “On the PM thread”/,
+      /switched off\. Switch it on at the top of the PM thread, or switch on “On the PM thread” here/,
     ],
     [
       "the project can't have one",

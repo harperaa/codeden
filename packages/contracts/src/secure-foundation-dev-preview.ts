@@ -108,7 +108,8 @@ function settingsWith(command: string): DevPreviewSettings {
     // The link is the address `next dev` itself prints, on the port it was given.
     urlFrom: "output",
     urlPattern: null,
-    pmEnabled: true,
+    // Off until a person switches it on, like every preview.
+    pmEnabled: false,
   };
 }
 
