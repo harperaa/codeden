@@ -66,12 +66,23 @@ describe("the desktop updater without an update feed", () => {
     expect(isMissingUpdateFile("sha512 checksum mismatch")).toBe(false);
   });
 
-  it("packages the app to update from CodeHarden's repository", async () => {
-    // A non-literal specifier: the config is plain JavaScript without type declarations.
+  it("packages the app to update from the channel's repository", async () => {
+    // Non-literal specifiers: both files are plain JavaScript without type declarations.
     const file = "../electron-builder.config.mjs";
     const builderConfig = (await import(/* @vite-ignore */ file)).default as { publish: unknown };
+    // The repository follows this checkout (its origin, or RELEASE_REPOSITORY), so a fork of
+    // CodeHarden updates from its own releases; CodeHarden's own checkout resolves to itself.
+    const define = new URL("../../../scripts/harden/channel-define.mjs", import.meta.url).href;
+    const { readHardenChannel } = (await import(/* @vite-ignore */ define)) as {
+      readHardenChannel: (
+        env?: NodeJS.ProcessEnv,
+        options?: { quiet?: boolean },
+      ) => { owner: string; repo: string };
+    };
+    const { owner, repo } = readHardenChannel(process.env, { quiet: true });
     expect(builderConfig.publish).toEqual([
-      { provider: "github", owner: "harperaa", repo: "codeharden", releaseType: "release" },
+      { provider: "github", owner, repo, releaseType: "release" },
     ]);
+    expect(`${owner}/${repo}`.toLowerCase()).not.toBe("leonvanzyl/codeden");
   });
 });
