@@ -35,6 +35,10 @@ const NewAutomationPage = lazyRouteComponent(
   "NewAutomationPage",
 );
 const AutomationsPage = lazyRouteComponent(() => import("@/routes/automations"), "AutomationsPage");
+const DevServersPage = lazyRouteComponent(
+  () => import("@/components/harden/dev-servers/page"),
+  "DevServersPage",
+);
 const FactoryItemPage = lazyRouteComponent(
   () => import("@/routes/factory-item"),
   "FactoryItemPage",
@@ -324,6 +328,7 @@ const routeTree = rootRoute.addChildren([
     createRoute({ getParentRoute: () => shell, path: "/", component: HomePage }),
     inboxRoute,
     reportsRoute,
+    createRoute({ getParentRoute: () => shell, path: "/dev-servers", component: DevServersPage }),
     searchRoute,
     sessionRoute,
     projectRoute,

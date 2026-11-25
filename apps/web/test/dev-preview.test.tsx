@@ -358,7 +358,7 @@ describe("the project's dev preview settings", () => {
 
 describe("the limits in the app's settings", () => {
   it("shows them, and Stop all stops every preview", async () => {
-    const stopAll = vi.fn(async () => ({ stopped: 2 }));
+    const stopAll = vi.fn(async () => ({ stopped: 2, failed: [] }));
     renderWithClient(<DevPreviewLimitsSettings />, clientWith({ stopAll }));
     const perProject = (await screen.findByLabelText(
       "Previews at once in a project",

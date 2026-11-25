@@ -153,7 +153,7 @@ describe("stopped means stopped", () => {
     await env.service.setProject("app", on);
     await env.service.idle();
     await up();
-    expect(await env.service.stopAll()).toBe(1);
+    expect(await env.service.stopAll()).toEqual({ stopped: 1, failed: [] });
     repos.pushToOrigin("index.html", "two\n");
     await tickAfter(91_000);
     await tickAfter(91_000);

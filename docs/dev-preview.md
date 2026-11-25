@@ -147,6 +147,42 @@ The base branch's preview runs from **a checkout of its own**, inside the app's 
 - **Ports**: the range previews get their ports from (43100 to 43199). A port in use is skipped. The app's own port, 4417 and 4317, and the ports `pnpm dev` uses (4318, 4319, 5173, 5174) are never given out, whatever the range.
 - **Stop all** ends every preview in every project. The PM threads' previews then stay stopped until you press **Restart** on one. Quitting the app also stops everything; the PM threads' previews come back when it starts again.
 
+## Dev Servers
+
+**Dev Servers**, directly under **Usage** in the sidebar, is one page for the dev previews of all projects: the PM threads' and the sessions' alike. It is there to see what is running and to stop it, to get memory, CPU and ports back. The number on the sidebar entry is how many are coming up or running.
+
+It only watches and stops. Nothing on it starts a preview or changes a project's commands: a preview is switched on at the top of its own PM or session page, as before.
+
+**What is listed.** Every preview that is preparing, starting, running, stopped or failed. One that is simply off is not listed. Running ones come first, then the ones coming up, then the stopped and failed; within that by project, the PM thread's before the sessions'.
+
+| A row shows | |
+|---|---|
+| Project and owner | The project, and **PM thread** or the session's title. The owner is a link to that page, where the preview's switch is. |
+| Status | The same status as on the strip, with the reason for **Stopped** and **Failed**. |
+| Up | How long ago it was started, while it is coming up or running. |
+| Ports | The ports it was given. |
+| Branch | For a PM thread's preview: the base branch and the commit its checkout is on. |
+| Link | The preview's address, once something answers on it. |
+| **Log** | The same log viewer as on the strip. The row itself never shows what the project printed. |
+
+There is no process id and no memory column. The app keeps a preview's process id only to end it safely, and reading memory would mean inspecting the process table for every row at every refresh, which it doesn't do.
+
+**Stopping.**
+
+- **Stop** on a row ends that dev server and frees its ports. It is exactly the switch at the top of the owning page, turned off: a session's preview is off, and a PM thread's preview is switched off for the project, so it doesn't come back by itself. The owning page's switch then shows off, and switching it on there works as before.
+- A row that says **Stopped** or **Failed** has no process left. Its button is **Switch off**, which does the same and takes it off the list.
+- Tick rows and press **Stop selected** to stop several. **Select all** ticks every row.
+- **Stop all** asks first and says how many will stop. It is the same **Stop all** as in **Settings**, **Dev previews** ([Limits](#limits)), and differs from stopping each row in one thing: a PM thread's preview keeps its switch on and stays on the list as **Stopped**, waiting for **Restart** on its page, and comes back when the app starts again. A session's preview is switched off either way.
+- Each stop stands alone. One that fails doesn't keep the others from stopping; it is named with its reason in a message, and its row says **Not stopped** and why.
+
+**Live.** The list is asked for again every few seconds, as often as a strip asks for its preview's state, and at once after a preview was switched on or off in the same window, on its own page or here. So a preview switched on at the top of a thread appears on this page, and one stopped here shows as off on its page, without a refresh. From another window or device a change shows within a few seconds.
+
+**When nothing is running** the page explains how a dev server gets there, since it can't start one: turn on the **Dev preview** switch at the top of a project's PM page or of a session; the first time for a project the app asks **Run these commands on this computer?**, or opens the project's settings when it has nothing to suggest ([Switch it on](#switch-it-on)); the preview then shows up on the page. It also says what a project needs first, its dev preview settings (the dev command, and a prepare command when there are dependencies to install), set on the project's page › **Settings** › **Dev preview**, and links to each project's PM page and Dev preview settings (the first eight; with no project at all it says a project comes first). Once something is listed, one line with the same pointer stays above the list.
+
+Two **example pictures** go with those steps: the strip with the switch off and on (**Running**, with its link), and a project's **Dev preview** settings with a dev and a prepare command. They are not image files. Each is the app's own strip or settings section, drawn with made-up data (`pnpm dev`, `main`, `http://localhost:43100`), so they follow the light and dark theme, fit a narrow window, need no network and can't go out of date. They can't do anything: each example is cut off from the app (it gets fixed answers from inside the page and has no way to reach the server), can't be clicked, typed in or focused, and is hidden from screen readers, which read the figure's description and caption instead. The written steps say everything the pictures show.
+
+**Another device** sees the list and each preview's log, and can stop previews, as on a strip. It can't start one, and a link is shown but not opened: the address is `localhost` on the computer running the app. The instructions say so there.
+
 ## What runs, and as what
 
 Read this before you set a project up: a dev preview runs the project's code on your computer.

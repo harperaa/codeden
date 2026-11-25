@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Hotkey, SectionLabel } from "@/components/common/bits";
 import { StatusDot } from "@/components/common/status-dot";
+import { DevServersNavRow } from "@/components/harden/dev-servers/nav-row";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -159,6 +160,7 @@ export function Sidebar({ width, onClose }: { width: number | string; onClose?: 
           <ChartColumnBig className="size-4 text-muted-foreground" />
           <span className="flex-1">Usage</span>
         </NavRow>
+        <DevServersNavRow />
       </nav>
 
       <WaitingOnYou sessions={waiting} projectName={projectName} />

@@ -105,6 +105,11 @@ export function createMockClient(opts: MockClientOptions = {}): CodeDenClient {
       // The local project stands for one the app can suggest nothing for.
       hasDevScript: (projectId) =>
         world.snapshot.projects.find((p) => p.id === projectId)?.kind !== "local",
+      projectName: (projectId) => world.snapshot.projects.find((p) => p.id === projectId)?.name,
+      sessionTitle: (sessionId) => {
+        const session = world.snapshot.sessions.find((s) => s.id === sessionId);
+        return session ? (session.title ?? session.purpose) : undefined;
+      },
     }),
     getSnapshot: () => delay(world.snapshot, 150),
     // The mock's sessions are short: it always answers with the whole session.

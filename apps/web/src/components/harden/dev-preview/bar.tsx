@@ -198,6 +198,9 @@ function DevPreviewStrip(target: PreviewTarget) {
   );
 }
 
+/** The Dev Servers page shows a preview's status and link exactly as its strip does. */
+export { PreviewLink as DevPreviewLink, StatusChip as DevPreviewStatusChip };
+
 function StatusChip({ state }: { state: DevPreviewState }) {
   return (
     <span
