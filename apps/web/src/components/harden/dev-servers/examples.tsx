@@ -92,6 +92,7 @@ const exampleApi: DevPreviewApi = {
   stopAll: async () => ({ stopped: 0, failed: [] }),
   servers: async () => ({ servers: [], remote: false }),
   stopServers: async () => ({ stopped: [], failed: [] }),
+  stopAllServers: async () => ({ stopped: [], failed: [] }),
 };
 
 /**

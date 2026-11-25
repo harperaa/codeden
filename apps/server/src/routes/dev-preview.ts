@@ -24,7 +24,7 @@ import { jsonBody, queryOf } from "./validate";
  * Whatever chooses a command or starts a process is answered on this computer only: setting
  * or removing a project's commands, the limits, starting a session's preview, switching the
  * PM thread's preview on and updating it. Another device sees the state, the link and the
- * log, and can stop previews; the Dev Servers page's routes (`/servers`, `/servers/stop`) only
+ * log, and can stop previews; the Dev Servers page's routes (`/servers`, `/servers/stop`, `/servers/stop-all`) only
  * list and stop, so another device may use both. No agent can reach any of it: `/api` takes the install token or
  * a person's sign-in, never a session's MCP token.
  */
@@ -52,6 +52,9 @@ export function devPreviewRoutes(s: AppServices) {
     .get("/servers", (c) => c.json<DevPreviewServerList>(dp.servers.list(isRemoteRequest(c))))
     .post("/servers/stop", jsonBody(StopDevPreviewServersRequest), async (c) =>
       c.json<DevPreviewServersStopped>(await dp.servers.stop(c.req.valid("json").keys)),
+    )
+    .post("/servers/stop-all", async (c) =>
+      c.json<DevPreviewServersStopped>(await dp.servers.switchAllOff()),
     )
     .get("/projects/:id", (c) =>
       c.json<DevPreviewProject>(dp.project(c.req.param("id"), isRemoteRequest(c))),

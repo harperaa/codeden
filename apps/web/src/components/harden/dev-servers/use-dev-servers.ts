@@ -1,10 +1,11 @@
-import type {
-  DevPreviewServer,
-  DevPreviewServerList,
-  DevPreviewStopFailure,
+import {
+  DEV_SERVERS_STOP_MAX,
+  type DevPreviewServer,
+  type DevPreviewServerList,
+  type DevPreviewServersStopped,
 } from "@codeden/contracts";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { devPreviewKey, devServersKey } from "@/components/harden/dev-preview/use-dev-preview";
 import { useClient } from "@/lib/api";
@@ -15,7 +16,7 @@ export function devServerName(server: DevPreviewServer): string {
   return `${server.projectName} · ${server.sessionTitle ?? "PM thread"}`;
 }
 
-/** Coming up or running: what a stop ends. A stopped or failed one has no process any more. */
+/** Coming up or running: it has a process. A stopped or failed one has none any more. */
 export function devServerActive(server: DevPreviewServer): boolean {
   const { status } = server.state;
   return status === "preparing" || status === "starting" || status === "running";
@@ -52,9 +53,14 @@ export function useDevServerList(opts: { background?: boolean } = {}) {
   });
 }
 
+const reason = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
 /**
  * The page's list and its stops. A stop is the owning page's own switch-off, asked for per
- * preview; Stop all is the one Settings › Dev previews has. Nothing here starts a preview.
+ * preview, also for Stop all. Nothing here starts a preview.
+ *
+ * Stops may overlap: every key being stopped is kept until its own request answers, so a row
+ * shows it for as long as it lasts and can't be asked twice.
  */
 export function useDevServers() {
   const client = useClient();
@@ -63,41 +69,86 @@ export function useDevServers() {
   const servers = list.data?.servers ?? [];
   /** Why a row's last stop failed, by its key. */
   const [failures, setFailures] = useState<Record<string, string>>({});
+  /** The keys being stopped, across every request under way. */
+  const pending = useRef(new Set<string>());
+  const [, redraw] = useState(0);
+  /** The bulk action under way, if one is. */
+  const [bulk, setBulk] = useState<"selected" | "all" | null>(null);
 
   const nameOf = (key: string) => {
     const server = servers.find((s) => s.state.key === key);
     return server ? devServerName(server) : key;
   };
-  const report = (stopped: number, failed: DevPreviewStopFailure[], asked: string[] | null) => {
+  const report = (answer: DevPreviewServersStopped, asked: string[] | null) => {
     setFailures((current) => {
       // What was asked again and went through is no longer failed.
       const kept = Object.entries(current).filter(
         ([key]) => asked !== null && !asked.includes(key),
       );
-      return Object.fromEntries([...kept, ...failed.map((f) => [f.key, f.message])]);
+      return Object.fromEntries([...kept, ...answer.failed.map((f) => [f.key, f.message])]);
     });
-    if (failed.length > 0) {
-      toast.error(`Couldn't stop ${plural(failed.length, "dev server")}`, {
-        description: failed.map((f) => `${nameOf(f.key)}: ${f.message}`).join("\n"),
+    if (answer.failed.length > 0) {
+      toast.error(`Couldn't stop ${plural(answer.failed.length, "dev server")}`, {
+        description: answer.failed.map((f) => `${nameOf(f.key)}: ${f.message}`).join("\n"),
       });
     }
-    if (stopped > 0) toast.success(`Stopped ${plural(stopped, "dev server")}`);
+    if (answer.stopped.length > 0) {
+      toast.success(`Stopped ${plural(answer.stopped.length, "dev server")}`);
+    }
   };
   // The strips on the owning pages and this list hear of it at once.
   const refresh = () => void queryClient.invalidateQueries({ queryKey: devPreviewKey });
 
-  const stop = useMutation({
-    mutationFn: (keys: string[]) => client.devPreview.stopServers(keys),
-    onSuccess: (answer, keys) => report(answer.stopped.length, answer.failed, keys),
-    onError: (e) => toast.error("Dev servers not stopped", { description: e.message }),
-    onSettled: refresh,
-  });
-  const stopAll = useMutation({
-    mutationFn: () => client.devPreview.stopAll(),
-    onSuccess: (answer) => report(answer.stopped, answer.failed, null),
-    onError: (e) => toast.error("Dev servers not stopped", { description: e.message }),
-    onSettled: refresh,
-  });
+  /**
+   * Switch these previews off. Keys already being stopped are left out, and a long list goes
+   * in requests of at most what one may name, whose answers are put together. Resolves with
+   * the keys that are off now.
+   */
+  const stop = async (keys: string[], as: "row" | "selected" = "row"): Promise<string[]> => {
+    const asked = keys.filter((key) => !pending.current.has(key));
+    if (asked.length === 0) return [];
+    for (const key of asked) pending.current.add(key);
+    redraw((n) => n + 1);
+    if (as === "selected") setBulk("selected");
+    const chunks: string[][] = [];
+    for (let i = 0; i < asked.length; i += DEV_SERVERS_STOP_MAX) {
+      chunks.push(asked.slice(i, i + DEV_SERVERS_STOP_MAX));
+    }
+    const answer: DevPreviewServersStopped = { stopped: [], failed: [] };
+    const results = await Promise.allSettled(
+      chunks.map((chunk) => client.devPreview.stopServers(chunk)),
+    );
+    results.forEach((result, i) => {
+      if (result.status === "fulfilled") {
+        answer.stopped.push(...result.value.stopped);
+        answer.failed.push(...result.value.failed);
+        return;
+      }
+      // The request itself failed: none of its previews is known to be stopped.
+      for (const key of chunks[i] ?? []) {
+        answer.failed.push({ key, message: reason(result.reason) });
+      }
+    });
+    for (const key of asked) pending.current.delete(key);
+    if (as === "selected") setBulk(null);
+    redraw((n) => n + 1);
+    report(answer, asked);
+    refresh();
+    return answer.stopped;
+  };
+
+  /** Switch every listed preview off, and give up the starts that wait for their turn. */
+  const stopAll = async (): Promise<void> => {
+    setBulk("all");
+    try {
+      report(await client.devPreview.stopAllServers(), null);
+    } catch (error) {
+      toast.error("Dev servers not stopped", { description: reason(error) });
+    } finally {
+      setBulk(null);
+      refresh();
+    }
+  };
 
   return {
     /** Undefined until the first answer. */
@@ -107,8 +158,8 @@ export function useDevServers() {
     failures,
     stop,
     stopAll,
+    bulk,
     /** A stop of this row is under way. */
-    stopping: (key: string) =>
-      stopAll.isPending || (stop.isPending && (stop.variables ?? []).includes(key)),
+    stopping: (key: string) => bulk === "all" || pending.current.has(key),
   };
 }

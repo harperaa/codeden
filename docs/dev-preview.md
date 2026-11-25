@@ -160,7 +160,7 @@ The base branch's preview runs from **a checkout of its own**, inside the app's 
 
 - **At once in a project** (3) and **at once in all projects** (6). The PM threads' previews count. When you start one over the limit, the app stops the oldest idle preview, which then says it was stopped to make room. A preview whose session is working is never stopped for this; if all of them are, the start is refused. A preview the app starts by itself (the PM thread's) never stops anyone else's.
 - **Ports**: the range previews get their ports from (43100 to 43199). A port in use is skipped. The app's own port, 4417 and 4317, and the ports `pnpm dev` uses (4318, 4319, 5173, 5174) are never given out, whatever the range.
-- **Stop all** ends every preview in every project. The PM threads' previews then stay stopped until you press **Restart** on one. Quitting the app also stops everything; the PM threads' previews come back when it starts again.
+- **Stop all** ends every preview in every project. The PM threads' previews then stay stopped until you press **Restart** on one. Quitting the app also stops everything; the PM threads' previews come back when it starts again. To switch them off as well, use **Stop all** on the [Dev Servers](#dev-servers) page, which is a different action. A preview that couldn't be stopped is reported and doesn't keep the others from stopping.
 
 ## Dev Servers
 
@@ -187,8 +187,10 @@ There is no process id and no memory column. The app keeps a preview's process i
 - **Stop** on a row ends that dev server and frees its ports. It is exactly the switch at the top of the owning page, turned off: a session's preview is off, and a PM thread's preview is switched off for the project, so it doesn't come back by itself. The owning page's switch then shows off, and switching it on there works as before.
 - A row that says **Stopped** or **Failed** has no process left. Its button is **Switch off**, which does the same and takes it off the list.
 - Tick rows and press **Stop selected** to stop several. **Select all** ticks every row.
-- **Stop all** asks first and says how many will stop. It is the same **Stop all** as in **Settings**, **Dev previews** ([Limits](#limits)), and differs from stopping each row in one thing: a PM thread's preview keeps its switch on and stays on the list as **Stopped**, waiting for **Restart** on its page, and comes back when the app starts again. A session's preview is switched off either way.
-- Each stop stands alone. One that fails doesn't keep the others from stopping; it is named with its reason in a message, and its row says **Not stopped** and why.
+- **Stop all** asks first and says how many will stop. It switches every dev server on the list off, exactly as **Stop** on each row would, the PM threads' previews and the stopped and failed rows included, and gives up starts that were still waiting their turn. Afterwards the list is empty, every owning page's switch shows off, nothing comes back by itself, and each is switched on again on its own page.
+- This is not the **Stop all** in **Settings**, **Dev previews** ([Limits](#limits)): that one ends what is running but leaves the PM threads' previews switched on, held until **Restart**, and they come back when the app starts again.
+- Each stop stands alone. One that fails doesn't keep the others from stopping; it is named with its reason in a message, and its row says **Not stopped** and why. A row that is being stopped shows it until its own stop has answered, and can't be stopped twice meanwhile.
+- A row that leaves the list is no longer ticked. If its preview is started again it comes back unticked, so **Stop selected** never takes a row you didn't tick while it was there.
 
 **Live.** The list is asked for again every few seconds, as often as a strip asks for its preview's state, and at once after a preview was switched on or off in the same window, on its own page or here. So a preview switched on at the top of a thread appears on this page, and one stopped here shows as off on its page, without a refresh. From another window or device a change shows within a few seconds.
 

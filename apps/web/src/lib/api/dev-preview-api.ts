@@ -45,6 +45,8 @@ export interface DevPreviewApi {
   servers(): Promise<DevPreviewServerList>;
   /** Switch these previews off, each as its own page's switch does. */
   stopServers(keys: string[]): Promise<DevPreviewServersStopped>;
+  /** The Dev Servers page's Stop all: every listed preview is switched off the same way. */
+  stopAllServers(): Promise<DevPreviewServersStopped>;
 }
 
 export function httpDevPreviewApi(http: Fetcher): DevPreviewApi {
@@ -73,6 +75,8 @@ export function httpDevPreviewApi(http: Fetcher): DevPreviewApi {
     servers: () => http.get(`${base}/servers`, (v) => DevPreviewServerList.parse(v)),
     stopServers: (keys) =>
       http.post(`${base}/servers/stop`, { keys }, (v) => DevPreviewServersStopped.parse(v)),
+    stopAllServers: () =>
+      http.post(`${base}/servers/stop-all`, {}, (v) => DevPreviewServersStopped.parse(v)),
   };
 }
 
@@ -150,6 +154,14 @@ export function mockDevPreviewApi(
     if (config) configs.set(id, { ...config, pmEnabled: false });
     turn(devPreviewBaseKey(id), false);
   };
+  /** Each preview off as its own switch does it: the PM thread's choice is kept. */
+  const switchOff = (keys: string[]) => {
+    for (const key of keys) {
+      if (key.startsWith(BASE)) switchPmOff(key.slice(BASE.length));
+      else turn(key, false);
+    }
+    return { stopped: [...keys], failed: [] };
+  };
   const sessionState = (sessionId: string) =>
     state(devPreviewSessionKey(sessionId), world.projectOf?.(sessionId) ?? "p-mock", sessionId);
   return {
@@ -208,12 +220,7 @@ export function mockDevPreviewApi(
         }),
       ),
     }),
-    stopServers: async (keys) => {
-      for (const key of keys) {
-        if (key.startsWith(BASE)) switchPmOff(key.slice(BASE.length));
-        else turn(key, false);
-      }
-      return { stopped: [...keys], failed: [] };
-    },
+    stopServers: async (keys) => switchOff(keys),
+    stopAllServers: async () => switchOff([...running]),
   };
 }

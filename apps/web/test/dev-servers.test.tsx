@@ -1,4 +1,5 @@
 import {
+  DEV_SERVERS_STOP_MAX,
   type DevPreviewServer,
   type DevPreviewServerList,
   type DevPreviewState,
@@ -8,7 +9,7 @@ import {
 } from "@codeden/contracts";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DevPreviewBar } from "@/components/harden/dev-preview/bar";
+import { DevPreviewBar, DevPreviewPmBar } from "@/components/harden/dev-preview/bar";
 import { DevServersNavRow } from "@/components/harden/dev-servers/nav-row";
 import { DevServersPage } from "@/components/harden/dev-servers/page";
 import type { CodeDenClient } from "@/lib/api";
@@ -163,26 +164,128 @@ describe("stopping", () => {
       expect(stopServers).toHaveBeenLastCalledWith(["base:p-storefront", "session:s-checkout"]),
     );
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Stopped 2 dev servers"));
+    // What was stopped is no longer selected.
+    await waitFor(() => expect(selected.textContent).toBe("Stop selected"));
   });
 
   it("Stop all asks first, says how many, and stops nothing on Cancel", async () => {
-    const stopAll = vi.fn(async () => ({ stopped: 2, failed: [] }));
+    const keys = [pmServer, sessionServer, failedServer].map((s) => s.state.key);
+    const stopAllServers = vi.fn(async () => ({ stopped: keys, failed: [] }));
+    const stopAll = vi.fn(async () => ({ stopped: 0, failed: [] }));
     page(
-      clientWith({ servers: async () => listOf([pmServer, sessionServer, failedServer]), stopAll }),
+      clientWith({
+        servers: async () => listOf([pmServer, sessionServer, failedServer]),
+        stopAllServers,
+        stopAll,
+      }),
     );
     await screen.findByTestId("dev-servers-list");
     fireEvent.click(screen.getByTestId("dev-servers-stop-all"));
     const dialog = within(await screen.findByTestId("dev-servers-confirm"));
-    // The failed one has nothing running: two will stop.
-    expect(dialog.getByRole("heading").textContent).toBe("Stop 2 dev servers?");
+    // Everything listed is switched off, the failed one too; two of them are running.
+    expect(dialog.getByRole("heading").textContent).toBe("Stop 3 dev servers?");
+    const says = screen.getByTestId("dev-servers-confirm").textContent ?? "";
+    expect(says).toMatch(/2 of 3 are running/);
+    expect(says).toMatch(/the PM threads' included/);
+    expect(says).toMatch(/switch on its own PM or session page then shows off/);
     fireEvent.click(dialog.getByText("Cancel"));
     await waitFor(() => expect(screen.queryByTestId("dev-servers-confirm")).toBeNull());
-    expect(stopAll).not.toHaveBeenCalled();
+    expect(stopAllServers).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByTestId("dev-servers-stop-all"));
     fireEvent.click(await screen.findByTestId("dev-servers-confirm-stop"));
-    await waitFor(() => expect(stopAll).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Stopped 2 dev servers"));
+    await waitFor(() => expect(stopAllServers).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Stopped 3 dev servers"));
+    // Not the one in Settings, which holds the PM threads' previews.
+    expect(stopAll).not.toHaveBeenCalled();
+  });
+
+  it("a row that leaves the list and comes back is not selected any more", async () => {
+    let listed = [pmServer, sessionServer];
+    const stopServers = vi.fn(async (keys: string[]) => ({ stopped: keys, failed: [] }));
+    const { queryClient } = page(clientWith({ servers: async () => listOf(listed), stopServers }));
+    const reload = () => queryClient.invalidateQueries({ queryKey: ["dev-preview"] });
+    await screen.findByTestId("dev-servers-list");
+    fireEvent.click(screen.getByTestId("dev-servers-select-all"));
+    const selected = screen.getByTestId("dev-servers-stop-selected") as HTMLButtonElement;
+    expect(selected.textContent).toBe("Stop selected (2)");
+
+    // The session's preview is switched off on its own page...
+    listed = [pmServer];
+    await reload();
+    await waitFor(() => expect(screen.getAllByTestId("dev-server-row")).toHaveLength(1));
+    expect(selected.textContent).toBe("Stop selected (1)");
+    // ...and switched on there again: it is back, and nobody ticked it.
+    listed = [pmServer, sessionServer];
+    await reload();
+    await waitFor(() => expect(screen.getAllByTestId("dev-server-row")).toHaveLength(2));
+    const box = screen.getByLabelText("Select my-site · Checkout") as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    expect(selected.textContent).toBe("Stop selected (1)");
+    fireEvent.click(selected);
+    await waitFor(() => expect(stopServers).toHaveBeenCalledWith(["base:p-storefront"]));
+    expect(stopServers).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps every row that is being stopped marked until its own stop answers", async () => {
+    const answers = new Map<string, () => void>();
+    const stopServers = vi.fn(
+      (keys: string[]) =>
+        new Promise<{ stopped: string[]; failed: [] }>((resolve) => {
+          answers.set(keys.join(), () => resolve({ stopped: keys, failed: [] }));
+        }),
+    );
+    page(clientWith({ servers: async () => listOf([pmServer, sessionServer]), stopServers }));
+    await screen.findByTestId("dev-servers-list");
+    const stopOf = (key: string) => row(key).getByTestId("dev-server-stop") as HTMLButtonElement;
+    fireEvent.click(stopOf("base:p-storefront"));
+    fireEvent.click(stopOf("session:s-checkout"));
+    await waitFor(() => expect(stopServers).toHaveBeenCalledTimes(2));
+    expect(stopOf("base:p-storefront").disabled).toBe(true);
+    expect(stopOf("session:s-checkout").disabled).toBe(true);
+    // A second press on a row that is being stopped asks nothing.
+    fireEvent.click(stopOf("base:p-storefront"));
+    expect(stopServers).toHaveBeenCalledTimes(2);
+    // A row's stop doesn't hold the bulk actions up.
+    expect((screen.getByTestId("dev-servers-stop-all") as HTMLButtonElement).disabled).toBe(false);
+
+    // The second one answers first: the first is still being stopped.
+    answers.get("session:s-checkout")?.();
+    await waitFor(() => expect(stopOf("session:s-checkout").disabled).toBe(false));
+    expect(stopOf("base:p-storefront").disabled).toBe(true);
+    answers.get("base:p-storefront")?.();
+    await waitFor(() => expect(stopOf("base:p-storefront").disabled).toBe(false));
+  });
+
+  it("sends a selection longer than one request may name in several, and puts the answers together", async () => {
+    const many = Array.from({ length: DEV_SERVERS_STOP_MAX + 5 }, (_, i) => ({
+      ...sessionServer,
+      sessionTitle: `Session ${i}`,
+      state: { ...sessionServer.state, key: devPreviewSessionKey(`s${i}`), sessionId: `s${i}` },
+    }));
+    const stopServers = vi.fn(async (keys: string[]) => {
+      // As the server: a request that names too many is refused whole.
+      if (keys.length > DEV_SERVERS_STOP_MAX) throw new Error("too many");
+      if (keys.length < DEV_SERVERS_STOP_MAX) throw new Error("The server went away.");
+      return { stopped: keys, failed: [] };
+    });
+    page(clientWith({ servers: async () => listOf(many), stopServers }));
+    await screen.findByTestId("dev-servers-list");
+    fireEvent.click(screen.getByTestId("dev-servers-select-all"));
+    fireEvent.click(screen.getByTestId("dev-servers-stop-selected"));
+    await waitFor(() => expect(stopServers).toHaveBeenCalledTimes(2));
+    expect(stopServers.mock.calls.map(([keys]) => keys.length)).toEqual([DEV_SERVERS_STOP_MAX, 5]);
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith(`Stopped ${DEV_SERVERS_STOP_MAX} dev servers`),
+    );
+    // The request that failed is reported for each of its previews, by name.
+    const [title, detail] = toast.error.mock.calls[0] ?? [];
+    expect(title).toBe("Couldn't stop 5 dev servers");
+    expect(detail.description).toMatch(/my-site · Session 204: The server went away\./);
+    // The ones that went through are no longer selected; the five that didn't still are.
+    await waitFor(() =>
+      expect(screen.getByTestId("dev-servers-stop-selected").textContent).toBe("Stop selected (5)"),
+    );
   });
 
   it("names a dev server that couldn't be stopped, on the toast and on its row", async () => {
@@ -369,5 +472,54 @@ describe("live, both ways", () => {
     // Switched off at the strip: gone from here too.
     fireEvent.click(toggle);
     await screen.findByTestId("dev-servers-empty");
+  });
+
+  it("after Stop all here, the PM thread's and the session's switches show off, and the list is empty", async () => {
+    const client = createMockClient();
+    await client.devPreview.confirmProject(PROJECT, {
+      command: "pnpm dev",
+      prepareCommand: "pnpm install --frozen-lockfile",
+      portVars: ["PORT"],
+      urlFrom: "port",
+      urlPattern: null,
+      pmEnabled: true,
+    });
+    await client.devPreview.startSession(agent.id);
+    renderWithClient(
+      <>
+        <div data-testid="pm-page">
+          <DevPreviewPmBar projectId={PROJECT} />
+        </div>
+        <div data-testid="session-page">
+          <DevPreviewBar session={agent} />
+        </div>
+        <DevServersPage />
+      </>,
+      client,
+      { withRouter: true },
+    );
+    const pmToggle = await within(await screen.findByTestId("pm-page")).findByTestId(
+      "dev-preview-switch",
+    );
+    const sessionToggle = await within(screen.getByTestId("session-page")).findByTestId(
+      "dev-preview-switch",
+    );
+    await waitFor(() => expect(screen.getAllByTestId("dev-server-row")).toHaveLength(2));
+    expect(pmToggle.getAttribute("aria-checked")).toBe("true");
+    expect(sessionToggle.getAttribute("aria-checked")).toBe("true");
+
+    fireEvent.click(screen.getByTestId("dev-servers-stop-all"));
+    fireEvent.click(await screen.findByTestId("dev-servers-confirm-stop"));
+    await screen.findByTestId("dev-servers-empty");
+    await waitFor(() => expect(pmToggle.getAttribute("aria-checked")).toBe("false"));
+    expect(sessionToggle.getAttribute("aria-checked")).toBe("false");
+    expect((await client.devPreview.project(PROJECT)).config?.pmEnabled).toBe(false);
+    expect((await client.devPreview.base(PROJECT)).enabled).toBe(false);
+
+    // Switched on again on the PM page, as before.
+    fireEvent.click(pmToggle);
+    const back = await screen.findByTestId("dev-server-row");
+    expect(back.dataset.key).toBe(`base:${PROJECT}`);
+    await waitFor(() => expect(pmToggle.getAttribute("aria-checked")).toBe("true"));
   });
 });

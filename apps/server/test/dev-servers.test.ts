@@ -156,6 +156,72 @@ describe("stopping", () => {
   });
 });
 
+describe("the page's Stop all", () => {
+  const afterNewCommit = async () => {
+    repos.pushToOrigin("index.html", `${Math.random()}\n`);
+    env.clock.now += 91_000;
+    await env.service.tick();
+    await env.service.idle();
+  };
+
+  it("switches every listed preview off, the PM thread's too, and nothing comes back by itself", async () => {
+    expect(await servers().switchAllOff()).toEqual({
+      stopped: ["base:app", "session:s1", "session:s2"],
+      failed: [],
+    });
+    expect(env.running()).toHaveLength(0);
+    expect(rows()).toEqual([]);
+    // Every owning switch shows off: the PM thread's choice is stored, not held.
+    expect(env.store.config("app")?.pmEnabled).toBe(false);
+    expect(env.service.baseState("app", false)).toMatchObject({ status: "off", enabled: false });
+    expect(env.service.sessionState("s1", false)).toMatchObject({ status: "off", enabled: false });
+    await afterNewCommit();
+    await afterNewCommit();
+    expect(env.procs).toHaveLength(3);
+    expect(rows()).toEqual([]);
+    // Switching each on from its own page works as before.
+    await env.service.setPm("app", true);
+    await env.service.startSession("s1");
+    expect(rows()).toEqual(["app/PM: starting", "app/Checkout: starting"]);
+  });
+
+  it("takes stopped and failed rows off the list too, also one Settings' Stop all had held", async () => {
+    await env.service.stopAll();
+    expect(rows()).toEqual(["app/PM: stopped"]);
+    expect(await servers().switchAllOff()).toEqual({ stopped: ["base:app"], failed: [] });
+    expect(rows()).toEqual([]);
+    expect(env.service.baseState("app", false)).toMatchObject({ status: "off", enabled: false });
+    await afterNewCommit();
+    expect(env.procs).toHaveLength(3);
+    // Nothing is left held: the switch starts it again.
+    await env.service.setPm("app", true);
+    expect(env.service.baseState("app", false)).toMatchObject({
+      status: "starting",
+      enabled: true,
+    });
+  });
+
+  it("gives up a start that was waiting its turn", async () => {
+    const waiting = env.service.startSession("s3").catch(() => undefined);
+    await servers().switchAllOff();
+    await waiting;
+    expect(env.procs).toHaveLength(3);
+    expect(env.running()).toHaveLength(0);
+    expect(env.service.sessionState("s3", false).status).toBe("off");
+  });
+
+  it("stops the rest when one fails, and names it", async () => {
+    const stuck = env.procs[0];
+    if (stuck) stuck.stop = async () => Promise.reject(new Error("It didn't end."));
+    expect(await servers().switchAllOff()).toEqual({
+      stopped: ["session:s1", "session:s2"],
+      failed: [{ key: "base:app", message: "It didn't end." }],
+    });
+    expect(env.procs[1]?.stopped).toBe(true);
+    expect(env.procs[2]?.stopped).toBe(true);
+  });
+});
+
 describe("over the routes", () => {
   const app = () =>
     new Hono()
@@ -185,6 +251,12 @@ describe("over the routes", () => {
       failed: [],
     });
     expect(env.running()).toHaveLength(1);
+    const all = await call("POST", "/servers/stop-all", undefined, PHONE);
+    expect(DevPreviewServersStopped.parse(await all.json())).toEqual({
+      stopped: ["session:s2"],
+      failed: [],
+    });
+    expect(env.running()).toHaveLength(0);
     // It still can't start one: these stay refused.
     expect((await call("POST", "/sessions/s1/start", undefined, PHONE)).status).toBe(403);
     expect((await call("PUT", "/projects/app/pm", { enabled: true }, PHONE)).status).toBe(403);

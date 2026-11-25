@@ -1,5 +1,5 @@
 import { MonitorPlay } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { lazyComponent } from "@/components/common/lazy-component";
 import {
   AlertDialog,
@@ -33,16 +33,31 @@ const LogDialog = lazyComponent(
  * nothing here can start one or name a command.
  */
 export function DevServersPage() {
-  const { list, error, servers, failures, stop, stopAll, stopping } = useDevServers();
+  const { list, error, servers, failures, stop, stopAll, stopping, bulk } = useDevServers();
   const { data: snapshot } = useSnapshot();
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
   const [logKey, setLogKey] = useState<string | null>(null);
 
-  // A row that left the list (stopped elsewhere) is no longer selected.
+  const drop = (gone: (key: string) => boolean) =>
+    setPicked((current) => {
+      const next = new Set([...current].filter((key) => !gone(key)));
+      return next.size === current.size ? current : next;
+    });
+  // A row that left the list is no longer selected: a preview that stops elsewhere and is
+  // started again comes back unticked, and no bulk stop takes it without a new tick.
+  const listed = servers.map((s) => s.state.key).join("\n");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only when the listed keys change
+  useEffect(() => {
+    const keys = new Set(listed ? listed.split("\n") : []);
+    drop((key) => !keys.has(key));
+  }, [listed]);
+  /** Stop these; the ones that went through are no longer selected either. */
+  const stopThese = (keys: string[], as: "row" | "selected") =>
+    void stop(keys, as).then((stopped) => drop((key) => stopped.includes(key)));
+
   const selected = servers.filter((s) => picked.has(s.state.key)).map((s) => s.state.key);
   const running = servers.filter(devServerActive).length;
-  const busy = stop.isPending || stopAll.isPending;
   const pick = (key: string, on: boolean) =>
     setPicked((current) => {
       const next = new Set(current);
@@ -66,8 +81,9 @@ export function DevServersPage() {
                 variant="outline"
                 size="sm"
                 className="h-8 text-xs"
-                disabled={busy || selected.length === 0}
-                onClick={() => stop.mutate(selected)}
+                // Disabled while a bulk stop runs; a single row's stop doesn't hold it up.
+                disabled={bulk !== null || selected.length === 0}
+                onClick={() => stopThese(selected, "selected")}
                 data-testid="dev-servers-stop-selected"
               >
                 Stop selected{selected.length > 0 ? ` (${selected.length})` : ""}
@@ -76,7 +92,7 @@ export function DevServersPage() {
                 variant="outline"
                 size="sm"
                 className="h-8 text-xs"
-                disabled={busy || running === 0}
+                disabled={bulk !== null}
                 onClick={() => setConfirming(true)}
                 data-testid="dev-servers-stop-all"
               >
@@ -129,7 +145,7 @@ export function DevServersPage() {
                       failure={failures[server.state.key]}
                       now={Date.now()}
                       onSelect={(on) => pick(server.state.key, on)}
-                      onStop={() => stop.mutate([server.state.key])}
+                      onStop={() => stopThese([server.state.key], "row")}
                       onLog={() => setLogKey(server.state.key)}
                     />
                   ))}
@@ -142,21 +158,22 @@ export function DevServersPage() {
       <AlertDialog open={confirming} onOpenChange={setConfirming}>
         <AlertDialogContent data-testid="dev-servers-confirm">
           <AlertDialogHeader>
-            <AlertDialogTitle>Stop {plural(running, "dev server")}?</AlertDialogTitle>
+            <AlertDialogTitle>Stop {plural(servers.length, "dev server")}?</AlertDialogTitle>
             <AlertDialogDescription>
-              Every running dev preview in every project ends, and its ports are free again. A
-              session's preview is switched off. A PM thread's preview keeps its switch on and stays
-              stopped until you press Restart on its page.
+              Every dev server on this list is switched off, in every project, the PM threads'
+              included. {running} of {servers.length} {running === 1 ? "is" : "are"} running: what
+              runs ends, and its ports are free again. Each one's Dev preview switch on its own PM
+              or session page then shows off; switch it on there to start it again.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              onClick={() => stopAll.mutate()}
+              onClick={() => void stopAll()}
               data-testid="dev-servers-confirm-stop"
             >
-              Stop {plural(running, "dev server")}
+              Stop {plural(servers.length, "dev server")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

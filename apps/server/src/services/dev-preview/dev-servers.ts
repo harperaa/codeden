@@ -38,8 +38,9 @@ const BASE = "base:";
  * of every preview that isn't simply off, and stopping them.
  *
  * Nothing here ends a process itself or starts one. A stop is the off path the owning page's
- * switch uses, per preview, and Stop all is the one Settings has; both end a preview's
- * processes through `Preview.stop` alone.
+ * switch uses, per preview, also for the page's Stop all (`switchAllOff`); Settings' Stop all
+ * (`stopAll`) holds the PM threads' previews instead. All of them end a preview's processes
+ * through `Preview.stop` alone.
  */
 export class DevServers {
   constructor(private readonly host: DevServersHost) {}
@@ -87,9 +88,21 @@ export class DevServers {
   }
 
   /**
-   * Stop every preview of every project (Settings › Dev previews and the Dev Servers page).
-   * Unlike switching each one off, the PM threads' previews keep their switch on: they stay
-   * stopped until a person restarts them, or until the app starts again.
+   * The page's Stop all: every listed preview is switched off as `stop` does it, the stopped
+   * and failed ones too, so every owning page's switch shows off and nothing is held or comes
+   * back by itself. Starts that wait for their turn are given up first, so none comes up
+   * right after.
+   */
+  switchAllOff(): Promise<DevPreviewServersStopped> {
+    this.host.cancelPending();
+    const listed = this.host.previews().filter((p) => p.status !== "off");
+    return this.stop(listed.map((p) => p.target.key));
+  }
+
+  /**
+   * Settings › Dev previews' Stop all: every running preview of every project ends. Unlike the
+   * page's (`switchAllOff`), the PM threads' previews keep their switch on: they stay stopped
+   * until a person restarts them, or until the app starts again.
    */
   async stopAll(): Promise<DevPreviewStopAll> {
     const running = this.host.previews().filter((p) => p.active);

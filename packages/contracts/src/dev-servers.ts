@@ -27,13 +27,20 @@ export const DevPreviewServerList = z.object({
 });
 export type DevPreviewServerList = z.infer<typeof DevPreviewServerList>;
 
+/** How many previews one stop request may name. A longer selection is sent in several requests. */
+export const DEV_SERVERS_STOP_MAX = 200;
+
 /** `POST /api/dev-preview/servers/stop`: the previews to switch off, by their keys. */
 export const StopDevPreviewServersRequest = z.object({
-  keys: z.array(z.string().min(1).max(200)).min(1).max(200),
+  keys: z.array(z.string().min(1).max(200)).min(1).max(DEV_SERVERS_STOP_MAX),
 });
 export type StopDevPreviewServersRequest = z.infer<typeof StopDevPreviewServersRequest>;
 
-/** The answer: each preview was switched off, or it is in `failed` with the reason. */
+/**
+ * The answer, also of `POST /api/dev-preview/servers/stop-all` (the page's Stop all, which
+ * switches every listed preview off and takes no body): each preview was switched off, or it is
+ * in `failed` with the reason.
+ */
 export const DevPreviewServersStopped = z.object({
   /** The keys that are off now (also one that was off already). */
   stopped: z.array(z.string()),
