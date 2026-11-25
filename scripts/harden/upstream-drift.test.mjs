@@ -467,7 +467,7 @@ const CALL_SITES = [
   ["apps/server/src/mcp/tools/pm/github.ts", "the project manager's triage tool neither puts nor takes the hold label", holds("if (named.some((label) => label.trim().toLowerCase() === FACTORY_HOLD_LABEL)) {")],
   ["apps/server/src/services/updates/installer.ts", "the update install keeps a person's npm settings that only restrict versions and sources (and not `ignore_scripts`, which would leave native modules unbuilt)", holds('"min_release_age",'), holds('"before",'), holds('"allow_git",'), lacks('"ignore_scripts",')],
   // --- the vision the project manager reads: the fork's own text in a file upstream ships too
-  [".codeden/VISION.md", "the fork's own vision (a conflict on this file is resolved to the fork's text)", /^CodeHarden is a hardened fork/],
+  [".codeden/VISION.md", "the fork's own vision (a conflict on this file is resolved to the fork's text)", visionOpensWithTheForksSentence],
 ];
 
 /**
@@ -609,6 +609,17 @@ function bothWindowIconsAreTheForks(code) {
 }
 bothWindowIconsAreTheForks.say =
   '`icon: this.asset("harden/icon.png")` for the window and for notifications (and no `this.asset("icon.png")`, upstream\'s icon)';
+
+/**
+ * The vision opens with the fork's own sentence: the file's first line, or the first line of
+ * text under its `# Vision` heading (the vision editor's format). Further down doesn't count:
+ * upstream's text with the fork's sentence somewhere below it is still upstream's vision.
+ */
+function visionOpensWithTheForksSentence(text) {
+  return /^(?:# Vision[ \t]*\r?\n\s*)?CodeHarden is a hardened fork/.test(text);
+}
+visionOpensWithTheForksSentence.say =
+  "`CodeHarden is a hardened fork` as its first line, or as the first line under its `# Vision` heading";
 
 /** A needed name or pattern as a reader would look for it in the file. */
 const say = (need) =>
@@ -1150,14 +1161,27 @@ describe("the fork's call sites are still there", () => {
     const vision = CALL_SITES.find(([file]) => file === ".codeden/VISION.md");
     const ours = read(vision[0]) ?? "";
     expect(callSiteProblem(vision, ours)).toBeNull();
+    const sentence = "CodeHarden is a hardened fork of CodeDen: the same tool.\n";
+    const gone = /VISION\.md no longer has `CodeHarden is a hardened fork` as its first line/;
+    // The sentence opens the file, or is the first text under the editor's heading.
+    expect(callSiteProblem(vision, sentence)).toBeNull();
+    expect(callSiteProblem(vision, `# Vision\n\n${sentence}\n- More.\n`)).toBeNull();
+    expect(callSiteProblem(vision, `# Vision\n${sentence}`)).toBeNull();
     // A sync resolved to upstream's side: its first line, whatever follows.
     const upstream =
       "CodeDen is the ultimate tool for Agentic Coding.\n- It has support for all major providers.\n";
-    expect(callSiteProblem(vision, upstream)).toMatch(
-      /VISION\.md no longer has `\^CodeHarden is a hardened fork`/,
-    );
+    expect(callSiteProblem(vision, upstream)).toMatch(gone);
+    expect(callSiteProblem(vision, `# Vision\n${upstream}`)).toMatch(gone);
+    // Upstream's lines in the editor's format, without the fork's sentence.
+    const formatted =
+      "# Vision\n- CodeDen is the ultimate tool for Agentic Coding.\n- CodeDen supports agent skills.\n\n## Goals\n- What should this project achieve in the next months?\n";
+    expect(callSiteProblem(vision, formatted)).toMatch(gone);
+    expect(callSiteProblem(vision, "")).toMatch(gone);
     // The fork's sentence further down is not the fork's vision: it must open the file.
     expect(callSiteProblem(vision, `${upstream}${ours}`)).not.toBeNull();
+    expect(callSiteProblem(vision, `${upstream}${sentence}`)).not.toBeNull();
+    expect(callSiteProblem(vision, `# Vision\n${upstream}\n${sentence}`)).not.toBeNull();
+    expect(callSiteProblem(vision, `# Vision\n\n## Goals\n${sentence}`)).not.toBeNull();
     expect(callSiteProblem(vision, null)).toMatch(/VISION\.md is gone/);
   });
 });
