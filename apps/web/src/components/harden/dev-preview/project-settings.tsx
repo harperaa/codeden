@@ -84,6 +84,14 @@ export function DevPreviewProjectSettings({ project }: { project: Project }) {
 
   if (!view.data) return null;
   const { remote, suggestion, baseBranch } = view.data;
+  // The app's own fixed commands for this project's lockfile, offered to fill the fields. Both
+  // at the dev command while the form is empty; afterwards the prepare command alone, at its
+  // own field, for as long as that is empty (stored settings without one included).
+  const offersCommand = suggestion !== null && !config && !form.command && !remote;
+  const offeredPrepare =
+    !remote && !offersCommand && !form.prepareCommand.trim()
+      ? (suggestion?.prepareCommand ?? null)
+      : null;
   const set = (patch: Partial<PreviewForm>) => {
     setForm((current) => ({ ...current, ...patch }));
     setProblem(null);
@@ -144,14 +152,28 @@ export function DevPreviewProjectSettings({ project }: { project: Project }) {
             disabled={remote}
             onChange={(e) => set({ command: e.target.value })}
           />
-          {suggestion && !config && !form.command && !remote && (
+          {offersCommand && (
             <p className="text-2xs text-muted-foreground" data-testid="dev-preview-suggestion">
               This project looks like it uses <code>{suggestion.command}</code> ({suggestion.reason}
-              ).{" "}
+              )
+              {suggestion.prepareCommand && (
+                <>
+                  , with <code>{suggestion.prepareCommand}</code> to install its dependencies
+                </>
+              )}
+              .{" "}
               <button
                 type="button"
                 className="underline underline-offset-2 hover:text-foreground"
-                onClick={() => set({ command: suggestion.command })}
+                onClick={() =>
+                  set({
+                    command: suggestion.command,
+                    // What the person typed there already stays theirs.
+                    prepareCommand: form.prepareCommand.trim()
+                      ? form.prepareCommand
+                      : (suggestion.prepareCommand ?? ""),
+                  })
+                }
               >
                 Fill it in
               </button>
@@ -172,6 +194,22 @@ export function DevPreviewProjectSettings({ project }: { project: Project }) {
             disabled={remote}
             onChange={(e) => set({ prepareCommand: e.target.value })}
           />
+          {offeredPrepare && (
+            <p
+              className="text-2xs text-muted-foreground"
+              data-testid="dev-preview-prepare-suggestion"
+            >
+              There is no prepare command, and a fresh checkout has no installed dependencies. This
+              project looks like it installs them with <code>{offeredPrepare}</code>.{" "}
+              <button
+                type="button"
+                className="underline underline-offset-2 hover:text-foreground"
+                onClick={() => set({ prepareCommand: offeredPrepare })}
+              >
+                Fill it in
+              </button>
+            </p>
+          )}
         </SettingRow>
         <SettingRow
           label="Port variables"

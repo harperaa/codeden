@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   type DevPreviewRecommended,
+  type DevPreviewSuggestion,
   HARDEN_DEV_PREVIEW_SCRIPT,
   hardenDevPreviewRecommended,
   type Project,
@@ -57,24 +58,35 @@ export function previewBaseBranch(project: Project): string | null {
   return project.defaultBranch ?? (project.kind === "github" ? project.github.defaultBranch : null);
 }
 
-const RUNNERS: [lockfile: string, command: string][] = [
-  ["pnpm-lock.yaml", "pnpm dev"],
-  ["yarn.lock", "yarn dev"],
-  ["bun.lock", "bun run dev"],
-  ["bun.lockb", "bun run dev"],
+/**
+ * Per lockfile, the dev command and the command that installs exactly what the lockfile says.
+ * The first one found decides. `yarn install --frozen-lockfile` is the one form both Yarn 1 and
+ * the later Yarn releases take: the later ones call it deprecated, print a warning and treat it
+ * as their `--immutable`, which Yarn 1 doesn't know.
+ */
+const RUNNERS: [lockfile: string, command: string, prepare: string][] = [
+  ["pnpm-lock.yaml", "pnpm dev", "pnpm install --frozen-lockfile"],
+  ["yarn.lock", "yarn dev", "yarn install --frozen-lockfile"],
+  ["bun.lock", "bun run dev", "bun install --frozen-lockfile"],
+  ["bun.lockb", "bun run dev", "bun install --frozen-lockfile"],
+  ["package-lock.json", "npm run dev", "npm ci"],
+  ["npm-shrinkwrap.json", "npm run dev", "npm ci"],
 ];
 
 /**
- * A dev command to offer in the settings form. Only the fact that a `dev` script exists is
- * read from the repository: the suggested text is one of a few fixed commands, never a string
- * the repository wrote. It is shown to the person and goes nowhere unless they save it.
+ * A dev command, and the prepare command that goes with it, to offer in the settings form and
+ * in the switch's question. Only two facts are read from the repository: that a `dev` script
+ * exists, and which lockfile is there. The suggested text is one of a few fixed commands, never
+ * a string the repository wrote. Without a lockfile there is no prepare command to offer. It is
+ * shown to the person and goes nowhere unless they save it.
  */
-export function suggestDevCommand(projectPath: string): { command: string; reason: string } | null {
+export function suggestDevCommand(projectPath: string): DevPreviewSuggestion | null {
   const dev = (rootPackage(projectPath)?.scripts as Record<string, unknown> | undefined)?.dev;
   if (typeof dev !== "string" || !dev.trim()) return null;
   const runner = RUNNERS.find(([lockfile]) => existsSync(join(projectPath, lockfile)));
   return {
     command: runner?.[1] ?? "npm run dev",
+    prepareCommand: runner?.[2] ?? null,
     reason: "package.json has a dev script",
   };
 }
