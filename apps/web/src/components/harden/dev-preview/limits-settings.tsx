@@ -30,8 +30,17 @@ export function DevPreviewLimitsSettings() {
   });
   const stopAll = useMutation({
     mutationFn: () => client.devPreview.stopAll(),
-    onSuccess: ({ stopped }) => {
+    onSuccess: ({ stopped, failed }) => {
       toast.success(stopped === 1 ? "Stopped 1 preview" : `Stopped ${stopped} previews`);
+      if (failed.length > 0) {
+        // The Dev Servers page lists them by name, each with its state.
+        toast.error(
+          failed.length === 1 ? "1 preview not stopped" : `${failed.length} not stopped`,
+          {
+            description: failed.map((f) => f.message).join("\n"),
+          },
+        );
+      }
       void queryClient.invalidateQueries({ queryKey: devPreviewKey });
     },
     onError: (e) => toast.error("Previews not stopped", { description: e.message }),

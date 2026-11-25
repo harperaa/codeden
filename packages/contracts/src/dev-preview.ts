@@ -301,8 +301,18 @@ export const DevPreviewLog = z.object({
 });
 export type DevPreviewLog = z.infer<typeof DevPreviewLog>;
 
-/** `POST /api/dev-preview/stop-all`. */
-export const DevPreviewStopAll = z.object({ stopped: z.int() });
+/** A preview that couldn't be stopped: which one (`session:<id>` or `base:<projectId>`), and why. */
+export const DevPreviewStopFailure = z.object({ key: z.string(), message: z.string() });
+export type DevPreviewStopFailure = z.infer<typeof DevPreviewStopFailure>;
+
+/**
+ * `POST /api/dev-preview/stop-all`. `stopped` counts the previews that were running and ended;
+ * one that couldn't be ended is in `failed` and didn't keep the others from stopping.
+ */
+export const DevPreviewStopAll = z.object({
+  stopped: z.int(),
+  failed: z.array(DevPreviewStopFailure).default([]),
+});
 export type DevPreviewStopAll = z.infer<typeof DevPreviewStopAll>;
 
 export const devPreviewSessionKey = (sessionId: string): string => `session:${sessionId}`;

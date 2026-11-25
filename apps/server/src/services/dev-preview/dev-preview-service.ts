@@ -6,6 +6,7 @@ import {
   type DevPreviewProject,
   type DevPreviewSettings,
   type DevPreviewState,
+  type DevPreviewStopAll,
   devPreviewBaseKey,
   devPreviewSessionKey,
   type Project,
@@ -14,6 +15,7 @@ import {
 import { conflict, notFound } from "../errors";
 import type { Exec } from "../exec";
 import { BasePreviews } from "./base-previews";
+import { DevServers } from "./dev-servers";
 import {
   previewBaseBranch,
   recommendDevPreview,
@@ -69,6 +71,8 @@ export class DevPreviewService {
   private readonly prepared: PreparedStore;
   private readonly previewDeps: PreviewDeps;
   private readonly bases: BasePreviews;
+  /** The Dev Servers page: every preview in one list, and stopping them. */
+  readonly servers: DevServers;
   private readonly now: () => number;
   private serverPort: number | null = null;
   private timer: NodeJS.Timeout | null = null;
@@ -112,6 +116,17 @@ export class DevPreviewService {
       now: this.now,
       checkEveryMs: deps.baseCheckEveryMs ?? 90_000,
       log: deps.log,
+    });
+    this.servers = new DevServers({
+      previews: () => [...this.previews.values()],
+      baseState: (id, remote) => this.baseState(id, remote),
+      sessionState: (id, remote) => this.sessionState(id, remote),
+      project: (id) => this.findProject(id),
+      session: deps.session,
+      stopSession: (id) => this.stopSession(id),
+      switchPmOff: (id) => this.setPm(id, false),
+      holdBases: () => this.bases.holdAll(),
+      cancelPending: () => this.starter.cancelPending(),
     });
   }
 
@@ -292,21 +307,9 @@ export class DevPreviewService {
     return { key, lines: this.previews.get(key)?.log() ?? [] };
   }
 
-  /** Stop every preview of every project. Returns how many were running. */
-  async stopAll(): Promise<number> {
-    const running = [...this.previews.values()].filter((p) => p.active);
-    // The PM threads' previews stay stopped until a person starts them again: without this
-    // the next look at the base branch would bring each one back.
-    this.bases.holdAll();
-    this.starter.cancelPending();
-    await Promise.all(
-      running.map((p) =>
-        p.target.kind === "base"
-          ? p.stop("stopped", "Stopped with Stop all. Restart it when you want it back.")
-          : p.stop("off"),
-      ),
-    );
-    return running.length;
+  /** Stop every preview of every project (`DevServers.stopAll`). */
+  stopAll(): Promise<DevPreviewStopAll> {
+    return this.servers.stopAll();
   }
 
   /** Where the project's base checkout is, or will be; null for a project that is gone. */

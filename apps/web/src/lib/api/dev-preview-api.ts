@@ -4,12 +4,15 @@ import {
   DevPreviewLimitsView,
   DevPreviewLog,
   DevPreviewProject,
+  DevPreviewServerList,
+  DevPreviewServersStopped,
   type DevPreviewSettings,
   DevPreviewState,
   DevPreviewStopAll,
   defaultDevPreviewLimits,
   devPreviewBaseKey,
   devPreviewSessionKey,
+  sortDevPreviewServers,
 } from "@codeden/contracts";
 import type { Fetcher } from "./http";
 
@@ -38,6 +41,12 @@ export interface DevPreviewApi {
   updateBase(projectId: string): Promise<DevPreviewState>;
   log(key: string): Promise<DevPreviewLog>;
   stopAll(): Promise<DevPreviewStopAll>;
+  /** Every preview of every project that isn't off (the Dev Servers page). */
+  servers(): Promise<DevPreviewServerList>;
+  /** Switch these previews off, each as its own page's switch does. */
+  stopServers(keys: string[]): Promise<DevPreviewServersStopped>;
+  /** The Dev Servers page's Stop all: every listed preview is switched off the same way. */
+  stopAllServers(): Promise<DevPreviewServersStopped>;
 }
 
 export function httpDevPreviewApi(http: Fetcher): DevPreviewApi {
@@ -63,6 +72,11 @@ export function httpDevPreviewApi(http: Fetcher): DevPreviewApi {
     log: (key) =>
       http.get(`${base}/log?key=${encodeURIComponent(key)}`, (v) => DevPreviewLog.parse(v)),
     stopAll: () => http.post(`${base}/stop-all`, {}, (v) => DevPreviewStopAll.parse(v)),
+    servers: () => http.get(`${base}/servers`, (v) => DevPreviewServerList.parse(v)),
+    stopServers: (keys) =>
+      http.post(`${base}/servers/stop`, { keys }, (v) => DevPreviewServersStopped.parse(v)),
+    stopAllServers: () =>
+      http.post(`${base}/servers/stop-all`, {}, (v) => DevPreviewServersStopped.parse(v)),
   };
 }
 
@@ -75,11 +89,15 @@ export function mockDevPreviewApi(
   world: {
     projectOf?: (sessionId: string) => string | null | undefined;
     hasDevScript?: (projectId: string) => boolean;
+    /** Names for the Dev Servers page; the ids stand in without them. */
+    projectName?: (projectId: string) => string | undefined;
+    sessionTitle?: (sessionId: string) => string | undefined;
   } = {},
 ): DevPreviewApi {
   let limits = defaultDevPreviewLimits();
   const configs = new Map<string, DevPreviewConfig>();
   const running = new Set<string>();
+  const since = new Map<string, string>();
   let nextPort = limits.portFrom;
   const ports = new Map<string, number>();
   const state = (key: string, projectId: string, sessionId: string | null): DevPreviewState => {
@@ -96,7 +114,7 @@ export function mockDevPreviewApi(
       ports: on ? [port] : [],
       message: null,
       logTail: [],
-      startedAt: null,
+      startedAt: on ? (since.get(key) ?? null) : null,
       configured: configs.has(projectId),
       unavailable: null,
       remote: false,
@@ -124,9 +142,25 @@ export function mockDevPreviewApi(
   });
   const turn = (key: string, on: boolean) => {
     if (on) {
+      if (!running.has(key)) since.set(key, new Date().toISOString());
       running.add(key);
       if (!ports.has(key)) ports.set(key, nextPort++);
     } else running.delete(key);
+  };
+  const SESSION = devPreviewSessionKey("");
+  const BASE = devPreviewBaseKey("");
+  const switchPmOff = (id: string) => {
+    const config = configs.get(id);
+    if (config) configs.set(id, { ...config, pmEnabled: false });
+    turn(devPreviewBaseKey(id), false);
+  };
+  /** Each preview off as its own switch does it: the PM thread's choice is kept. */
+  const switchOff = (keys: string[]) => {
+    for (const key of keys) {
+      if (key.startsWith(BASE)) switchPmOff(key.slice(BASE.length));
+      else turn(key, false);
+    }
+    return { stopped: [...keys], failed: [] };
   };
   const sessionState = (sessionId: string) =>
     state(devPreviewSessionKey(sessionId), world.projectOf?.(sessionId) ?? "p-mock", sessionId);
@@ -168,7 +202,25 @@ export function mockDevPreviewApi(
     stopAll: async () => {
       const stopped = running.size;
       running.clear();
-      return { stopped };
+      return { stopped, failed: [] };
     },
+    servers: async () => ({
+      remote: false,
+      servers: sortDevPreviewServers(
+        [...running].map((key) => {
+          const sessionId = key.startsWith(SESSION) ? key.slice(SESSION.length) : null;
+          const preview = sessionId
+            ? sessionState(sessionId)
+            : state(key, key.slice(BASE.length), null);
+          return {
+            state: preview,
+            projectName: world.projectName?.(preview.projectId) ?? preview.projectId,
+            sessionTitle: sessionId ? (world.sessionTitle?.(sessionId) ?? sessionId) : null,
+          };
+        }),
+      ),
+    }),
+    stopServers: async (keys) => switchOff(keys),
+    stopAllServers: async () => switchOff([...running]),
   };
 }

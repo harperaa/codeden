@@ -182,7 +182,10 @@ describe("dev preview contracts", () => {
       "a",
       "b",
     ]);
-    expect(roundTrip(DevPreviewStopAll, { stopped: 2 })).toEqual({ stopped: 2 });
+    // An answer from before failures were reported reads as one without any.
+    expect(roundTrip(DevPreviewStopAll, { stopped: 2 })).toEqual({ stopped: 2, failed: [] });
+    const failed = [{ key: "session:s1", message: "It didn't end." }];
+    expect(roundTrip(DevPreviewStopAll, { stopped: 1, failed })).toEqual({ stopped: 1, failed });
   });
 });
 

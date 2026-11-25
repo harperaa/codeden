@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { useClient } from "@/lib/api";
 
 export const devPreviewKey = ["dev-preview"] as const;
+/** The list of every project's previews (the Dev Servers page and its sidebar entry). */
+export const devServersKey = [...devPreviewKey, "servers"] as const;
 const stateKey = (target: PreviewTarget) =>
   target.sessionId
     ? ([...devPreviewKey, "session", target.sessionId] as const)
@@ -39,7 +41,11 @@ export function useDevPreview(target: PreviewTarget) {
     refetchInterval: (query) => pollEvery(query.state.data),
     retry: false,
   });
-  const done = (next: DevPreviewState) => queryClient.setQueryData(key, next);
+  const done = (next: DevPreviewState) => {
+    queryClient.setQueryData(key, next);
+    // The Dev Servers page lists it: it hears of the change at once, not at its next look.
+    void queryClient.invalidateQueries({ queryKey: devServersKey });
+  };
   const failed = (what: string) => (error: Error) => {
     toast.error(what, { description: error.message });
     void queryClient.invalidateQueries({ queryKey: key });

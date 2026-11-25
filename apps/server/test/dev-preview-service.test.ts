@@ -354,7 +354,7 @@ describe("when a preview stops", () => {
   it("Stop all stops everything and says how many", async () => {
     await start("s1");
     await start("s2");
-    expect(await env.service.stopAll()).toBe(2);
+    expect(await env.service.stopAll()).toEqual({ stopped: 2, failed: [] });
     expect(env.running()).toHaveLength(0);
   });
 

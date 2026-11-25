@@ -442,6 +442,10 @@ const CALL_SITES = [
   ["apps/web/src/routes/project.tsx", "the dev preview section of a project's settings", /<DevPreviewProjectSettings project=\{project\} \/>/],
   ["apps/web/src/routes/settings.tsx", "the dev preview limits in the app's settings", /render: \(\) => <DevPreviewLimitsSettings \/>/],
   ["apps/web/src/lib/api/http-client.ts", "the web client's dev preview calls", /devPreview: httpDevPreviewApi\(http\)/],
+  // --- Dev Servers: the page that lists every dev preview and stops them, a fork-only page in upstream's sidebar and router
+  ["packages/contracts/src/index.ts", "exports the Dev Servers page's contracts", /export \* from "\.\/dev-servers"/],
+  ["apps/web/src/components/shell/sidebar/sidebar.tsx", "the Dev Servers entry, directly under Usage in the sidebar", /<span className="flex-1">Usage<\/span>\n\s+<\/NavRow>\n\s+<DevServersNavRow \/>/],
+  ["apps/web/src/router.tsx", "the Dev Servers page, as a lazy route", /import\("@\/components\/harden\/dev-servers\/page"\)/, /path: "\/dev-servers", component: DevServersPage/],
   // --- A new project's scheduled starter automations: staggered start times, set where upstream creates the starter set
   ["apps/server/src/services/automations/definitions.ts", "a new starter automation is created with the next free start time among the active projects' copies (as part of its creation, not as an edit)", /const trigger = staggeredStarterTrigger\(template, project, this\.deps\.projects\.list\(\), /, /this\.create\(\{ templateId: template\.id, projectId, enabled: enable, trigger \}, \{ id \}\)/],
   ["apps/server/src/services/harden/starter-stagger.ts", "the rule itself: 10-minute steps, only plain minute and hour fields, never past midnight, archived projects and the project itself take no slot", "staggeredCron", "STAGGER_STEP_MINUTES = 10", "MINUTES_PER_DAY", /other\.id === project\.id \|\| other\.archivedAt !== null/],
