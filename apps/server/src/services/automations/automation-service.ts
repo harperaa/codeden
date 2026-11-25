@@ -14,6 +14,7 @@ import type { Db } from "../../db/client";
 import type { EventStore } from "../../events/store";
 import type { SettingsStore } from "../../settings-store";
 import { conflict, errorMessage, notFound } from "../errors";
+import { HardenSyncAutomations } from "../harden/sync-automations";
 import type { InboxService } from "../inbox-service";
 import type { OrchestrationService } from "../orchestration/orchestration-service";
 import type { AutomationPort } from "../orchestration/ports";
@@ -52,6 +53,8 @@ export interface AutomationServiceDeps {
   /** `~/.codeden` (global automation files live in `automations/`). */
   home: string;
   templatesDir?: string;
+  /** Folder of the shipped upstream-sync review definitions (found automatically when omitted). */
+  hardenSyncDir?: string;
   /** Clock (tests). */
   now?: () => Date;
   scheduler?: { graceMs?: number; maxWaitMs?: number };
@@ -80,6 +83,8 @@ export class AutomationService implements AutomationPort {
   readonly schedules: ScheduleStore;
   readonly sources: AutomationSources;
   readonly definitions: AutomationDefinitions;
+  /** The upstream-sync review automations of hardened-fork projects (off until switched on). */
+  readonly hardenSync: HardenSyncAutomations;
   readonly triage: TriageService;
   readonly executor: AutomationExecutor;
   readonly scheduler: CronScheduler;
@@ -113,6 +118,13 @@ export class AutomationService implements AutomationPort {
       sources: this.sources,
       schedules: this.schedules,
       fetch: deps.fetch,
+    });
+    this.hardenSync = new HardenSyncAutomations({
+      db: deps.db,
+      projects: deps.projects,
+      definitions: this.definitions,
+      dir: deps.hardenSyncDir,
+      log: deps.log,
     });
     this.triage = new TriageService({
       db: deps.db,
@@ -150,6 +162,7 @@ export class AutomationService implements AutomationPort {
 
   start(): void {
     this.sources.start();
+    this.offerHardenSync();
     for (const run of this.runs.activeWithSession()) {
       // Triage runs follow report_triage, not the PM session they were sent to.
       if (this.definitions.find(run.automationId)?.action.type === "triage") continue;
@@ -387,6 +400,15 @@ export class AutomationService implements AutomationPort {
     this.executor.recordSkipped(this.executor.newRun(req), "skipped_by_pm");
   }
 
+  /** Never in the way of the automations themselves: a failure is logged. */
+  private offerHardenSync(): void {
+    try {
+      this.hardenSync.offer();
+    } catch (error) {
+      this.deps.log?.(`automations: upstream-sync reviews: ${errorMessage(error)}`);
+    }
+  }
+
   private triageAutomation(projectId: string): Automation | undefined {
     const project = this.deps.projects.list().find((p) => p.id === projectId);
     if (!project) return undefined;
@@ -409,6 +431,11 @@ export class AutomationService implements AutomationPort {
           this.definitions.starterSet((e.payload as { project: Project }).project.id, false);
         }
         if (events.some((e) => e.type.startsWith("project."))) this.sources.reload();
+        // A hardened fork's project gets the upstream-sync reviews, off; so does one whose
+        // hand-made copy was just deleted.
+        if (events.some((e) => e.type.startsWith("project.") || e.type === "automation.deleted")) {
+          this.offerHardenSync();
+        }
         this.scheduler.refresh();
       }
       this.syncSessions(events);

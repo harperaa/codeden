@@ -135,6 +135,33 @@ A mistake in such a rule would stop the daily sync and every release with nobody
 
 One setting does help and is the owner's to choose: with "Allow squash merging" and "Allow rebase merging" off (Settings › General › Pull Requests), a sync can only be merged with its history, which is the form the release check follows most directly. The check asks about squashed and rebased pull requests too, so this is belt and braces.
 
+## The two review automations
+
+The daily review of a sync is two automations that ship with the app (the npm package and the desktop app carry the same two files, `templates/harden-sync/` in the package, `apps/server/templates/harden-sync/` in the repository):
+
+| Automation | Schedule | What it does |
+|---|---|---|
+| **Daily upstream sync: first review** | Every day 09:00 | Fetches upstream, and when there is anything new builds the `sync/YYYY-MM-DD` branch (the upstream commit itself, or one merge commit that resolves the conflicts), reads every change, runs the fast checks and the fork's own tests, opens the pull request into the working branch, waits for CI and sets `sync-first-pass`, `sync-needs-review` or `sync-hold`. It never sets `sync-approved` |
+| **Daily upstream sync: second review** | Every day 11:00 and 15:00 | A separate session reads the same changes on its own first, checks the head's shape, the conflict resolutions and CI's result on the exact head commit, and only then compares with the first review. Only it sets `sync-approved`, which starts the 48 hours, and it is the one that reports to you. It changes no code |
+
+**Which projects get them.** Only a project whose folder is a checkout of a hardened fork: this repository or a fork of it. The app looks for the workspace's root `package.json` and two plain files, `scripts/harden/fork-config.sh` and `.github/workflows/upstream-sync-merge.yml`. It only looks: nothing in the project is run, and nothing from it goes into the automations, whose text is fixed in the app. No other project gets them, and they are not in the Templates gallery or the starter set.
+
+**They arrive switched off.** Both run at the **Auto** permission level, push a `sync/...` branch and label pull requests, so you read them and switch each one on yourself in the project's Automations. **Enable starter set** does not switch them on. A project gets them when it is added, and a project from before the update gets them when the app next starts. They are ordinary automations of the project from then on: edit, duplicate or delete them. A deleted one doesn't come back by itself; to get it back, **Import** its file from the folder above.
+
+**If you made them by hand before.** The app adds a shipped review only when no automation of the project (or for all projects) has its work key: `automation:upstream-sync-review` for the first, `automation:upstream-sync-second-review` for the second. An instance that already has hand-made ones with those work keys therefore keeps exactly what it has after updating, and no review runs twice. To move to the shipped text, delete your hand-made automation: the shipped one appears in its place at once, switched off, and you switch it on. (Renaming yours or changing its work key while it stays on would give you two that both run; delete it instead.)
+
+**What they depend on.**
+
+- **The labels** `sync-approved`, `sync-needs-review` and `sync-hold` (`scripts/harden/setup-fork.sh` creates them). The first review creates `sync-first-pass` itself when it is missing; the merge job ignores that label.
+- **The repository variables** `UPSTREAM_REPO`, `UPSTREAM_BRANCH` and, when set, `HARDEN_BRANCH` and `MIRROR_BRANCH`. The reviews take every name from the repository (`scripts/harden/fork-config.sh` or the variables), so the same text works in a fork.
+- **`gh` signed in** on the machine, with the right to push branches and label pull requests in the fork, and `node` and `pnpm` installed.
+- **One inbox approval per run.** Each review writes its full findings, security findings included, to a private hand-off file outside its worktree, `harden-sync-review/<branch>.first.md` and `.second.md` in the repository's git folder. That file is never committed or pushed. Writing outside the worktree asks you once per run; the review waits for the answer.
+- **Both in the same app instance.** The second review reads the first's hand-off file from that folder and the first's pull request from GitHub, so both automations must run in the same instance, on the same machine, for the same project. Run from another instance or machine, the second review would not find that file, and the first review's security findings and its questions for you are nowhere else.
+- **The schedule is in America/New_York**, the timezone releases are stamped in. A fork in another timezone changes the two schedules in Automations.
+- **No provider or model is pinned**: each review runs on the project's default agent, so the definitions need no agent you may not have. You can pick one for either review in its editor.
+
+Security findings never go public: not in the pull request, a comment, a label or a branch name. They reach you in the second review's report and the inbox only.
+
 ## In a fork
 
 A fork of CodeHarden gets all of it with the sync: the rule, the status, the release check and the waiver workflow. They read the fork's own names from its repository variables. To be able to waive, create the environment `sync-waiver` as above; `scripts/harden/setup-fork.sh` does not create environments. In a repository an organization owns, also set `SYNC_WAIVER_APPROVERS`. The number of hours is `COOLDOWN_HOURS` in `scripts/harden/sync-cooldown.sh`.

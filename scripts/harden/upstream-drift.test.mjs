@@ -426,6 +426,10 @@ const CALL_SITES = [
   ["packages/contracts/src/harden-channel.ts", "the Secure Foundation template in the fork's configuration", "HARDEN_TEMPLATE_REPOSITORY", "HARDEN_TEMPLATE_BRANCH", "__CODEHARDEN_TEMPLATE_REPOSITORY__", "__CODEHARDEN_TEMPLATE_BRANCH__"],
   ["packages/contracts/src/provider.ts", "the capability the setup brief reads instead of a provider id", "projectCommands"],
   ["packages/providers/src/claude/adapter.ts", "the provider that runs project command files says so", /projectCommands: true/],
+  // --- The upstream-sync review automations: fork-only, offered from upstream's automation service
+  ["packages/contracts/src/index.ts", "exports the list of the shipped upstream-sync review automations", /export \* from "\.\/harden-sync-automations"/],
+  ["apps/server/src/services/automations/automation-service.ts", "a hardened fork's project is given the upstream-sync reviews (off) at start, on a project change and when an automation is deleted", /this\.hardenSync = new HardenSyncAutomations\(/, /this\.sources\.start\(\);\n\s+this\.offerHardenSync\(\);/, /e\.type === "automation\.deleted"\)\) \{\n\s+this\.offerHardenSync\(\);/, /this\.hardenSync\.offer\(\);/],
+  ["apps/server/src/services/harden/sync-automations.ts", "the reviews go only to a recognised checkout, always off, never beside an automation with the same work key and never back after a deletion", "isHardenedForkCheckout", "HARDEN_SYNC_AUTOMATIONS", /enabled: false,/, "wasDeleted"],
   // --- Dev preview: a fork-only feature, slotted into upstream's files one line at a time
   ["packages/contracts/src/index.ts", "exports the dev preview's contracts", /export \* from "\.\/dev-preview"/],
   ["apps/server/src/routes/api.ts", "the dev preview routes", /\.route\("\/dev-preview", devPreviewRoutes\(s\)\)/],

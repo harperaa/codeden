@@ -99,6 +99,8 @@ The templates are ordinary Markdown files (shipped in the package under `templat
 - **Never past midnight**, which would change the day. When every 10-minute time up to the end of the day is taken, the new project gets the one the fewest projects use, the earliest first.
 - Event-triggered and manual starters (Issue triage), automations for all projects and automations you create yourself, from a template or not, are not staggered.
 
+**Upstream-sync reviews.** A project that is a checkout of a hardened fork (this repository or a fork of it) also gets two automations that are not templates: **Daily upstream sync: first review** and **Daily upstream sync: second review**. They arrive switched off, and **Enable starter set** leaves them off. [The two review automations](codeharden-sync-cooldown.md#the-two-review-automations) says what they do and what they need.
+
 ## Triggers
 
 In files, the editor's choices are stored as one of three trigger types. Schedules are always stored as a cron expression, so "Every weekday at 09:00" is `0 9 * * 1-5`.
