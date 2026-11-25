@@ -285,8 +285,9 @@ describe("what the switch offers", () => {
       reason: "A CodeHarden checkout",
     };
     expect(devPreviewOffer(view({ recommended }), doppler)?.settings).toEqual(doppler.settings);
-    expect(devPreviewOffer(view({ recommended }), undefined)).toEqual(recommended);
-    expect(devPreviewOffer(view(), SECURE_FOUNDATION_NO_DEV_PREVIEW)).toEqual({
+    const none = SECURE_FOUNDATION_NO_DEV_PREVIEW;
+    expect(devPreviewOffer(view({ recommended }), none)).toEqual(recommended);
+    expect(devPreviewOffer(view(), none)).toEqual({
       settings: { ...suggested, pmEnabled: false },
       reason: "package.json has a dev script",
     });
@@ -299,11 +300,19 @@ describe("what the switch offers", () => {
       confirmedAt: "2026-11-24T10:00:00.000Z",
       baseBranch: "main",
     };
-    expect(devPreviewOffer(view({ config }), undefined)).toBeNull();
-    expect(devPreviewOffer(view({ remote: true }), undefined)).toBeNull();
-    expect(devPreviewOffer(view({ suggestion: null }), undefined)).toBeNull();
+    const none = SECURE_FOUNDATION_NO_DEV_PREVIEW;
+    expect(devPreviewOffer(view({ config }), none)).toBeNull();
+    expect(devPreviewOffer(view({ remote: true }), none)).toBeNull();
+    expect(devPreviewOffer(view({ suggestion: null }), none)).toBeNull();
     // The plain dev command would not be enough for such a project: the settings say why.
     expect(devPreviewOffer(view(), { ...doppler, settings: null })).toBeNull();
+  });
+
+  it("is nothing without both answers: a missing one never falls through to the dev script", () => {
+    // `dev-preview-switch-lookups.test.tsx` has the strip with a lookup that failed.
+    expect(devPreviewOffer(view(), undefined)).toBeNull();
+    expect(devPreviewOffer(undefined, SECURE_FOUNDATION_NO_DEV_PREVIEW)).toBeNull();
+    expect(devPreviewOffer(undefined, doppler)).toBeNull();
     expect(devPreviewOffer(undefined, undefined)).toBeNull();
   });
 });

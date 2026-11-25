@@ -94,7 +94,7 @@ function DevPreviewStrip(target: PreviewTarget) {
                 disabled={busy || blocked !== null || setup.loading}
                 // Nothing stored for the project yet: ask first, or lead to the settings.
                 onCheckedChange={(on) =>
-                  on && !state.configured ? setup.begin() : turn.mutate(on)
+                  on && !state.configured ? void setup.begin() : turn.mutate(on)
                 }
               />
               <span className="font-medium text-foreground/80">Dev preview</span>
@@ -127,11 +127,18 @@ function DevPreviewStrip(target: PreviewTarget) {
             Check the port variables in the settings
           </a>
         )}
-        {setup.needsCommand && (
+        {(setup.needsCommand || setup.failed) && (
           <>
-            <span className="text-muted-foreground" data-testid="dev-preview-needs-command">
-              Needs a dev command first.
-            </span>
+            {setup.failed ? (
+              // No answer, so no offer: the switch asks again, and the settings are a click away.
+              <span className="text-muted-foreground" data-testid="dev-preview-check-failed">
+                Couldn't check this project's settings. Switch it on to try again.
+              </span>
+            ) : (
+              <span className="text-muted-foreground" data-testid="dev-preview-needs-command">
+                Needs a dev command first.
+              </span>
+            )}
             <a
               href={settingsHref(target.projectId)}
               className="shrink-0 underline underline-offset-2 hover:text-foreground"

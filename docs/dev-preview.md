@@ -20,6 +20,9 @@ Turn on **Dev preview** at the top of a thread.
 | Has confirmed settings | Starts that thread's preview. |
 | Has none, and the app can suggest settings for it | Shows the suggested dev command, prepare command, port variables and where the link comes from, and asks **Run these commands on this computer?** **Save and allow** stores them and starts that thread's preview. **Cancel** stores nothing and leaves the switch off. **Edit settings** opens the project's settings, where you can change them first. |
 | Has none, and the app has nothing to suggest | The strip says **Needs a dev command first**, and the switch opens the project's **Settings**, **Dev preview**. The app doesn't guess a command. |
+| Has none, and the app couldn't find out what to suggest | The strip says **Couldn't check this project's settings**, with the link to the settings. Nothing is suggested, not even a `dev` script's command: the app first has to know whether Secure Foundation set the project up. Switching it on asks again. |
+
+For a Secure Foundation project the question also lists what stays for you to do before the preview works (copying `.env.local`, keeping Convex running): the same notes the settings show.
 
 The app can suggest settings for a checkout of [this repository](#this-repository-codeharden-itself), for a [Secure Foundation project](#secure-foundation-projects), and for a project with a `dev` script (the dev command only: `pnpm dev`, `yarn dev`, `bun run dev` or `npm run dev`, by the lockfile it finds; the dialog says when there is no prepare command, which a fresh worktree usually needs). The suggested text is the app's own, never the repository's, and the question is the same one the settings ask: it is asked once per project, and again whenever the commands change. Settings stored from a session's switch leave the PM thread's preview off; stored from the PM thread's switch, they switch it on.
 

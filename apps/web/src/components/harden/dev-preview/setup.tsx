@@ -10,6 +10,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import {
   DEV_PREVIEW_ANCHOR,
+  SecureFoundationDevPreviewTodo,
   useSecureFoundationDevPreviewQuery,
 } from "@/components/harden/secure-foundation/dev-preview-offer";
 import { useClient } from "@/lib/api";
@@ -25,6 +26,11 @@ export interface DevPreviewOffer {
   settings: DevPreviewSettings;
   /** Where they come from, as the dialog says it: "A CodeHarden checkout". */
   reason: string;
+  /**
+   * For a Secure Foundation project: the answer the settings come from, whose notes say what
+   * stays for the person to do. The dialog shows them as the settings form does.
+   */
+  secureFoundation?: SecureFoundationDevPreview;
 }
 
 /**
@@ -34,16 +40,24 @@ export interface DevPreviewOffer {
  *
  * Every value is one the app wrote (its constants, or what the person answered in the Secure
  * Foundation form). Nothing here is text from the repository, and nothing is stored by it.
+ *
+ * Both answers are needed. Without the Secure Foundation one (not there yet, or the lookup
+ * failed) nothing is offered: the plain dev command is only right for a project that answer
+ * says is not a Secure Foundation project.
  */
 export function devPreviewOffer(
   view: DevPreviewProject | undefined,
   secureFoundation: SecureFoundationDevPreview | undefined,
 ): DevPreviewOffer | null {
-  if (!view || view.remote || view.config) return null;
-  if (secureFoundation?.applies) {
+  if (!view || !secureFoundation || view.remote || view.config) return null;
+  if (secureFoundation.applies) {
     // Without values for such a project a plain dev command would not be enough either.
     return secureFoundation.settings
-      ? { settings: secureFoundation.settings, reason: "A Secure Foundation project" }
+      ? {
+          settings: secureFoundation.settings,
+          reason: "A Secure Foundation project",
+          secureFoundation,
+        }
       : null;
   }
   if (view.recommended) return view.recommended;
@@ -78,9 +92,13 @@ export function useDevPreviewSetup(target: PreviewTarget, state: DevPreviewState
   const secureFoundation = useSecureFoundationDevPreviewQuery(projectId, wanted);
   const [asking, setAsking] = useState<DevPreviewSettings | null>(null);
   // Kept beside it: the offer is gone the moment the settings are stored, the dialog a bit later.
-  const [reason, setReason] = useState("");
+  const [shown, setShown] = useState<DevPreviewOffer | null>(null);
   const loading = wanted && (view.isPending || secureFoundation.isPending);
-  const offer = wanted && !loading ? devPreviewOffer(view.data, secureFoundation.data) : null;
+  // A lookup that failed says nothing about the project. Then nothing is offered, whatever the
+  // other one answered: the strip says so, and the next switch asks again.
+  const failed = wanted && !loading && (view.isError || secureFoundation.isError);
+  const offer =
+    wanted && !loading && !failed ? devPreviewOffer(view.data, secureFoundation.data) : null;
   const href = devPreviewSettingsHref(projectId);
   const openSettings = () => {
     setAsking(null);
@@ -114,14 +132,26 @@ export function useDevPreviewSetup(target: PreviewTarget, state: DevPreviewState
   return {
     /** The offer isn't known yet: the switch waits for it. */
     loading,
+    /** What the project could be offered couldn't be looked up; the settings are still there. */
+    failed,
     /** Nothing can be offered: a dev command has to be typed in the settings first. */
-    needsCommand: wanted && !loading && !offer,
+    needsCommand: wanted && !loading && !failed && !offer,
     /** The person switched it on. */
-    begin: () => {
-      if (!offer) return openSettings();
+    begin: async () => {
+      let found = offer;
+      if (failed) {
+        // Ask again. Still no answer: nothing is offered and the strip keeps saying so.
+        const [project, foundation] = await Promise.all([
+          view.refetch(),
+          secureFoundation.refetch(),
+        ]);
+        if (project.isError || foundation.isError) return;
+        found = devPreviewOffer(project.data, foundation.data);
+      }
+      if (!found) return openSettings();
+      setShown(found);
       // The switch is this thread's: the PM thread's preview is on only when it was that one.
-      setReason(offer.reason);
-      setAsking({ ...offer.settings, pmEnabled: sessionId === null });
+      setAsking({ ...found.settings, pmEnabled: sessionId === null });
     },
     dialog: (
       <DevPreviewConfirmDialog
@@ -131,8 +161,19 @@ export function useDevPreviewSetup(target: PreviewTarget, state: DevPreviewState
         onConfirm={(settings) => save.mutate(settings)}
         onCancel={() => setAsking(null)}
       >
+        {shown?.secureFoundation && (
+          // What stays for the person to do (`.env.local`, Convex), as the settings form shows
+          // it. It scrolls here, so the commands and the buttons stay in view.
+          <div
+            className="max-h-40 space-y-1.5 overflow-y-auto rounded-md border border-border/70 px-3 py-2 text-2xs scroll-thin"
+            data-testid="dev-preview-confirm-notes"
+          >
+            <p className="font-medium">Before the preview works for this project:</p>
+            <SecureFoundationDevPreviewTodo offer={shown.secureFoundation} />
+          </div>
+        )}
         <p className="text-2xs text-muted-foreground" data-testid="dev-preview-confirm-offer">
-          These are the app's suggested settings for this project ({reason}).{" "}
+          These are the app's suggested settings for this project ({shown?.reason}).{" "}
           {sessionId
             ? "This session's preview starts once you allow them."
             : "The PM thread's preview starts once you allow them."}{" "}
