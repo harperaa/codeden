@@ -33,6 +33,15 @@
 // CodeHarden's package name is the default only for CodeHarden. In a checkout whose `origin` is
 // another repository an ordinary build warns and goes on (development, CI, tests); packing a
 // release (`strict`) refuses, so a fork can't publish, or update its users, as `codeharden`.
+// Two things pack a release: the npm release (scripts/harden/npm-release.mjs passes `strict`)
+// and the desktop installers. For the second there is one signal, read here and nowhere else:
+//   HARDEN_RELEASE_PACK `1` makes every read of the channel in that process strict; unset, empty
+//                       or `0` leaves it an ordinary build
+// apps/desktop/scripts/package.mjs sets it whenever it builds installers (every run without
+// `--dir`: `pnpm desktop:dist` and the "Desktop installers" workflow, its dry run included),
+// before it reads the channel and loads electron-builder.config.mjs, so the two can't differ.
+// `pnpm desktop:build`, `pnpm desktop:dev` and the tests never set it. Set it yourself to make
+// another step strict too (`HARDEN_RELEASE_PACK=1 pnpm build`).
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -131,17 +140,30 @@ function readTemplate(env) {
   return { templateRepository: repository, templateBranch: branch };
 }
 
+/** The variable that says a release is being packed (the desktop packaging sets it). */
+export const RELEASE_PACK_VARIABLE = "HARDEN_RELEASE_PACK";
+
+/** Whether `env` says a release is being packed; throws on a value that is neither yes nor no. */
+export function isReleasePack(env = process.env) {
+  const value = env[RELEASE_PACK_VARIABLE]?.trim() ?? "";
+  if (value === "" || value === "0") return false;
+  if (value === "1") return true;
+  // A misspelt "yes" must not quietly be an ordinary build.
+  throw new Error(`${RELEASE_PACK_VARIABLE} must be 1, 0 or unset, found "${value}"`);
+}
+
 const same = (a, b) => a.toLowerCase() === b.toLowerCase();
 let warned = false;
 
 /**
  * The channel for this build; throws when a variable is set to something malformed.
  * `origin` is the checkout's `owner/repo` (tests pass it); `strict` is for packing a release:
- * it throws instead of building another repository's release with CodeHarden's names.
+ * it throws instead of building another repository's release with CodeHarden's names. Left
+ * out, it is what `env` says (`HARDEN_RELEASE_PACK`, see the top of this file).
  */
 export function readHardenChannel(env = process.env, options = {}) {
   const origin = options.origin === undefined ? originRepository() : options.origin;
-  const strict = Boolean(options.strict);
+  const strict = options.strict === undefined ? isReleasePack(env) : Boolean(options.strict);
   const foreign = origin ? !same(origin, DEFAULT_RELEASE_REPOSITORY) : strict;
   const where = origin
     ? `this checkout's origin is ${origin}`

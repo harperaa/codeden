@@ -23,6 +23,9 @@ import { readHardenChannel } from "../../scripts/harden/channel-define.mjs";
 /**
  * The GitHub repository the app updates from (CodeHarden's own, never upstream's) and the app's
  * identity: its name, id, link scheme and file names, so it installs beside upstream CodeDen.
+ * Strict when installers are packed (scripts/package.mjs sets HARDEN_RELEASE_PACK first): a
+ * fork without PACKAGE_NAME is refused there, and only warned when a test or a --dir build
+ * loads this file.
  */
 const channel = readHardenChannel();
 const { productName, appId, slug } = channel;
