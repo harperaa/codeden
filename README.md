@@ -1,6 +1,6 @@
 > **CodeHarden** is a hardened fork of [CodeDen](https://github.com/leonvanzyl/codeden) by Leon van Zyl.
-> It stays close to upstream: new upstream changes are reviewed every day for security and function,
-> and merged 48 hours after they are approved. The release script refuses a change that was merged
+> It stays close to upstream: an upstream change is taken only after it has been public for 48 hours,
+> then reviewed for security and function, and merged 48 hours after it is approved. The release script refuses a change that was merged
 > sooner, unless the owner waived the wait for it, on the record ([how](docs/codeharden-sync-cooldown.md)). CodeHarden versions are timestamps; the app's own
 > version number stays upstream's. It is its own app: its data is in `~/.codeharden`, it listens on
 > port 4417, and it installs and runs next to CodeDen ([how they stay apart](docs/desktop.md#next-to-codeden)).
@@ -216,7 +216,7 @@ It's experimental. Start with the software factory on a test repository with aut
 
 ## Make your own hardened fork
 
-CodeHarden follows CodeDen: upstream changes are mirrored daily, reviewed, and merged 48 hours after approval, and the release script refuses a change that was merged sooner unless the owner waived it; releases are timestamps; npm is published by hand. You can follow CodeHarden the same way, with your own changes on top and your own npm package. Three repository variables and one script point the same machinery at your names.
+CodeHarden follows CodeDen: upstream changes are mirrored daily, taken into a sync only once they have been public for 48 hours, reviewed, and merged 48 hours after approval, and the release script refuses a change that was merged sooner unless the owner waived it; releases are timestamps; npm is published by hand. You can follow CodeHarden the same way, with your own changes on top and your own npm package. Three repository variables and one script point the same machinery at your names.
 
 | Variable | What it is | CodeHarden | Your fork |
 |---|---|---|---|
@@ -240,15 +240,25 @@ Your fork has two branches that matter. `harden` is your working and default bra
 
 **The Secure Foundation template.** The add-project dialog's [Secure Foundation](docs/secure-foundation.md) option installs one template repository, which is part of the build like the names above: your fork keeps CodeHarden's (`harperaa/secure-vibe-coding-OS`, branch `main`) unless you set the variables `TEMPLATE_REPOSITORY` and `TEMPLATE_BRANCH` to your own, and `TEMPLATE_REPOSITORY=none` builds without the option.
 
-**How syncs get reviewed and merged.** Every day the workflow fast-forwards `mirror`. To take upstream changes, push them to a branch named `sync/...` and open a pull request into `harden`:
+**How syncs get reviewed and merged.** Every day the workflow fast-forwards `mirror`. Upstream's newest commits are not taken at once: a commit is in quarantine until it has been on the branch you follow for 48 hours, by GitHub's record of when it arrived there, not by the date written in the commit. `scripts/harden/upstream-eligible.sh latest` asks GitHub and names the newest commit that is out of quarantine, without fetching any code; it is often not the newest one, and the rest follows on a later day. To take upstream changes, push that commit to a branch named `sync/...` and open a pull request into `harden`. Nothing is fetched or pushed without a yes: the helper has to succeed, say `eligible` and name a full commit id.
 
 ```sh
-git fetch origin mirror
-git push origin FETCH_HEAD:refs/heads/sync/2026-01-05
-gh pr create --repo <you>/<your fork> --base harden --head sync/2026-01-05 --title "sync: upstream to 2026-01-05"
+git fetch origin harden
+answer=$(scripts/harden/upstream-eligible.sh latest); code=$?
+state=$(printf '%s\n' "$answer" | sed -n 's/^state: //p')
+commit=$(printf '%s\n' "$answer" | sed -n 's/^commit: //p')
+if [ "$code" = 0 ] && [ "$state" = eligible ] && printf '%s\n' "$commit" | grep -Eqx '[0-9a-f]{40}'; then
+  git fetch --no-tags https://github.com/<the repository you follow> "$commit" &&
+    git push origin "$commit":refs/heads/sync/2026-01-05 &&
+    gh pr create --repo <you>/<your fork> --base harden --head sync/2026-01-05 --title "sync: upstream to 2026-01-05"
+else
+  printf '%s\n' "$answer" | sed -n 's/^short: //p'   # why not, and when the next commit comes out
+fi
 ```
 
-Review it, then label it: `sync-approved` (the workflow merges it 48 hours later, if its checks pass and nothing was pushed since), `sync-needs-review` or `sync-hold` (it waits for you). You can do the daily review yourself, or switch on the two automations the app gives a project that is a checkout of your fork: **Daily upstream sync: first review** opens the pull request, reads the changes and runs the checks, and **Daily upstream sync: second review**, a separate session, checks that work and is the only one that sets `sync-approved`. Both arrive switched off, run in the same app instance and ask for one inbox approval per run for their private hand-off file ([The two review automations](docs/codeharden-sync-cooldown.md#the-two-review-automations)). The workflow only looks at the labels. Three things to expect:
+On most days the answer is not a yes (nothing is out of quarantine, or GitHub could not say), and `commit` is then empty. Never hand git an empty or unchecked id: `git fetch <url> ""` fetches the remote's `HEAD`, which is upstream's newest commit, and `git push origin "":refs/heads/<branch>` deletes that branch.
+
+Review it, then label it: `sync-approved` (the workflow merges it 48 hours later, if its checks pass and nothing was pushed since), `sync-needs-review` or `sync-hold` (it waits for you). So there are two waits, 48 hours before a sync and 48 hours after its approval, and an upstream change reaches a release about five days after it was pushed ([The quarantine](docs/codeharden-sync-cooldown.md#the-quarantine-48-hours-before-a-sync)). You can do the daily review yourself, or switch on the two automations the app gives a project that is a checkout of your fork: **Daily upstream sync: first review** asks which commit is out of quarantine, fetches upstream up to that commit only, opens the pull request, reads the changes and runs the checks, and **Daily upstream sync: second review**, a separate session, confirms the quarantine, checks that work and is the only one that sets `sync-approved`. Both arrive switched off, run in the same app instance and ask for one inbox approval per run for their private hand-off file ([The two review automations](docs/codeharden-sync-cooldown.md#the-two-review-automations)). The workflow only looks at the labels. Three things to expect:
 
 - If the pull request conflicts, merge `harden` into the sync branch and resolve there. `VERSION`, `CODEHARDEN-CHANGELOG.md` and `state/upstream-base` are yours: a release writes them, and refuses when something else changed them since the last one, so a sync never changes them. They conflict once both sides have made a release, and before that the sync brings CodeHarden's newer ones: either way merge `harden` into the sync branch and keep yours (`git checkout harden -- VERSION CODEHARDEN-CHANGELOG.md state/`). A sync that still changes one is left for you, like the next kind. `README.md` conflicts often, because upstream edits its own: README conflicts resolve to the fork's wording; carry upstream's content changes over by hand.
 - A sync that changes `scripts/harden/` (the release and sync scripts themselves) is never merged for you: it gets `sync-needs-review`, and you merge it by hand with a merge commit.

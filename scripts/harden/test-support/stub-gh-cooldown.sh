@@ -59,6 +59,9 @@ case "$method $rest" in
     ref=$(field ref)
     branch="${ref#refs/heads/}"
     body=$(answer "activity/${branch//\//__}.json" '[]') ;;
+  "GET git/ref/heads/"*)
+    branch="${rest#git/ref/heads/}"
+    body=$(answer "refs/${branch//\//__}.json") ;;
   "GET commits/"*/pulls)
     sha="${rest#commits/}"
     sha="${sha%/pulls}"
