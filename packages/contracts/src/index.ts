@@ -43,6 +43,7 @@ export * from "./harden-brand";
 export * from "./harden-channel";
 export * from "./harden-defaults";
 export * from "./harden-mark";
+export * from "./harden-sync-automations";
 export * from "./harden-version";
 export * from "./hook-output";
 export * from "./images-api";

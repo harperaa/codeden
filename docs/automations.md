@@ -90,6 +90,8 @@ The CodeDen server downloads the link **once**, when you press **Preview**, and 
 
 The templates are ordinary Markdown files (shipped in the package under `templates/automations/`); open one with **Use template**, or export it, to see how a good prompt is structured.
 
+**Upstream-sync reviews.** A project that is a checkout of a hardened fork (this repository or a fork of it) also gets two automations that are not templates: **Daily upstream sync: first review** and **Daily upstream sync: second review**. They arrive switched off, and **Enable starter set** leaves them off. [The two review automations](codeharden-sync-cooldown.md#the-two-review-automations) says what they do and what they need.
+
 ## Triggers
 
 In files, the editor's choices are stored as one of three trigger types. Schedules are always stored as a cron expression, so "Every weekday at 09:00" is `0 9 * * 1-5`.
