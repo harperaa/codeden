@@ -442,6 +442,9 @@ const CALL_SITES = [
   ["apps/web/src/routes/project.tsx", "the dev preview section of a project's settings", /<DevPreviewProjectSettings project=\{project\} \/>/],
   ["apps/web/src/routes/settings.tsx", "the dev preview limits in the app's settings", /render: \(\) => <DevPreviewLimitsSettings \/>/],
   ["apps/web/src/lib/api/http-client.ts", "the web client's dev preview calls", /devPreview: httpDevPreviewApi\(http\)/],
+  // --- A new project's scheduled starter automations: staggered start times, set where upstream creates the starter set
+  ["apps/server/src/services/automations/definitions.ts", "a new starter automation is created with the next free start time among the active projects' copies (as part of its creation, not as an edit)", /const trigger = staggeredStarterTrigger\(template, project, this\.deps\.projects\.list\(\), /, /this\.create\(\{ templateId: template\.id, projectId, enabled: enable, trigger \}, \{ id \}\)/],
+  ["apps/server/src/services/harden/starter-stagger.ts", "the rule itself: 10-minute steps, only plain minute and hour fields, never past midnight, archived projects and the project itself take no slot", "staggeredCron", "STAGGER_STEP_MINUTES = 10", "MINUTES_PER_DAY", /other\.id === project\.id \|\| other\.archivedAt !== null/],
   // --- OpenCode sessions: slash commands are plain prompts in this fork for now
   ["packages/providers/src/opencode/commands.ts", "the commands OpenCode lists pass the fork's switch before they are reported or routed", /commands = hardenListedCommands\(/],
   ["packages/providers/src/opencode/harden-commands.ts", "the switch itself, off in the product", "hardenListedCommands", /^let run = false;$/m],

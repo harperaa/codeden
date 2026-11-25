@@ -172,7 +172,7 @@ function StoredPreview({
   );
   if (!(state?.enabled ?? config.pmEnabled)) {
     return note(
-      "The PM thread's preview is switched off. Switch on “On the PM thread” and save the change to start it.",
+      "The PM thread's preview is switched off. Switch it on at the top of the PM thread, or switch on “On the PM thread” here and save the change.",
     );
   }
   if (!state) return children;

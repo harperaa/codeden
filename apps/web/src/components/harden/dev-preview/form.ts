@@ -19,7 +19,7 @@ export function formOf(config: DevPreviewSettings | null): PreviewForm {
     portVars: (config?.portVars ?? [DEV_PREVIEW_DEFAULT_PORT_VAR]).join(", "),
     urlFrom: config?.urlFrom ?? "port",
     urlPattern: config?.urlPattern ?? "",
-    pmEnabled: config?.pmEnabled ?? true,
+    pmEnabled: config?.pmEnabled ?? false,
   };
 }
 

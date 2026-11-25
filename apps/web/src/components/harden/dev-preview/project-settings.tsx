@@ -8,20 +8,11 @@ import {
   useSecureFoundationDevPreview,
 } from "@/components/harden/secure-foundation/dev-preview-offer";
 import { Segmented, SettingRow, SettingsSection } from "@/components/settings/settings-ui";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useClient } from "@/lib/api";
 import { DevPreviewActions } from "./actions";
+import { DevPreviewConfirmDialog } from "./confirm-dialog";
 import { formChanged, formHolds, formOf, type PreviewForm, settingsOf } from "./form";
 import { DevPreviewRecommendedNotes } from "./recommended";
 import { devPreviewKey } from "./use-dev-preview";
@@ -111,7 +102,7 @@ export function DevPreviewProjectSettings({ project }: { project: Project }) {
     <div id={DEV_PREVIEW_ANCHOR} className="scroll-mt-6" data-testid="dev-preview-settings">
       <SettingsSection
         title="Dev preview"
-        description="Run this project's dev server for a session, in that session's own worktree, so the page reloads as the agent works. The PM thread gets one for the base branch."
+        description="Run this project's dev server for a session, in that session's own worktree, so the page reloads as the agent works. The PM thread can have one for the base branch. Each is switched on at the top of its thread."
       >
         <SecureFoundationDevPreviewNotes
           projectId={project.id}
@@ -228,7 +219,7 @@ export function DevPreviewProjectSettings({ project }: { project: Project }) {
         </SettingRow>
         <SettingRow
           label="On the PM thread"
-          help={`Keep a preview of ${baseBranch ? `the base branch (${baseBranch})` : "the base branch"} running from a checkout of its own, updated as the branch moves.`}
+          help={`Keep a preview of ${baseBranch ? `the base branch (${baseBranch})` : "the base branch"} running from a checkout of its own, updated as the branch moves. Off until you switch it on, here or at the top of the PM thread.`}
         >
           <Switch
             aria-label="Dev preview on the PM thread"
@@ -249,56 +240,13 @@ export function DevPreviewProjectSettings({ project }: { project: Project }) {
           onRemove={() => remove.mutate()}
         />
       </SettingsSection>
-      <AlertDialog open={asking !== null} onOpenChange={(open) => !open && setAsking(null)}>
-        <AlertDialogContent data-testid="dev-preview-confirm">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Run these commands on this computer?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The app runs them as you, in this project's worktrees, whenever a preview starts. They
-              run the repository's own code (its dev script, and install scripts in the prepare
-              step), including what an agent wrote in a session, with no approval step and with
-              access to everything you can read. Previews that are running stop now: the PM thread's
-              starts again with the new commands, a session's when you turn it on again.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-2 text-xs">
-            <Shown label="Dev command" command={asking?.command} />
-            {asking?.prepareCommand && (
-              <Shown label="Prepare command" command={asking.prepareCommand} />
-            )}
-            <p className="text-2xs text-muted-foreground">
-              Ports go in {asking?.portVars.join(", ")}.{" "}
-              {asking?.pmEnabled
-                ? `A preview of the base branch${baseBranch ? ` (${baseBranch})` : ""} starts for the PM thread, and follows that branch only.`
-                : "No preview starts for the PM thread."}
-            </p>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              data-testid="dev-preview-confirm-run"
-              disabled={save.isPending}
-              onClick={(event) => {
-                event.preventDefault();
-                if (asking) save.mutate(asking);
-              }}
-            >
-              Save and allow
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-  );
-}
-
-function Shown({ label, command }: { label: string; command: string | undefined }) {
-  return (
-    <div>
-      <div className="mb-1 text-2xs text-muted-foreground">{label}</div>
-      <pre className="overflow-auto rounded-md bg-muted/60 px-3 py-2 font-mono text-[11.5px] whitespace-pre-wrap wrap-anywhere">
-        {command}
-      </pre>
+      <DevPreviewConfirmDialog
+        asking={asking}
+        baseBranch={baseBranch}
+        saving={save.isPending}
+        onConfirm={(settings) => save.mutate(settings)}
+        onCancel={() => setAsking(null)}
+      />
     </div>
   );
 }

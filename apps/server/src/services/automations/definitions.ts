@@ -17,6 +17,7 @@ import { rowToAutomation } from "../../db/rows";
 import { automations } from "../../db/schema";
 import type { EventStore } from "../../events/store";
 import { badRequest, conflict, notFound } from "../errors";
+import { staggeredStarterTrigger } from "../harden/starter-stagger";
 import type { ProjectService } from "../projects/project-service";
 import { approved, changesBehaviour } from "./approval";
 import { collectImportFiles, previewFile, previewImport } from "./import";
@@ -197,7 +198,13 @@ export class AutomationDefinitions {
         out.push(enable ? this.setEnabled(id, true) : existing);
         continue;
       }
-      out.push(this.create({ templateId: template.id, projectId, enabled: enable }, { id }));
+      // Scheduled starters start at a time no other active project's copy uses (fork).
+      const trigger = staggeredStarterTrigger(template, project, this.deps.projects.list(), (p) =>
+        this.find(starterId(p, template.id)),
+      );
+      out.push(
+        this.create({ templateId: template.id, projectId, enabled: enable, trigger }, { id }),
+      );
     }
     return out;
   }
