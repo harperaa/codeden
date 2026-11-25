@@ -163,6 +163,11 @@ describe("the shipped upstream-sync review definitions", () => {
         "If `node`, `pnpm` or `gh` aren't on your PATH, find where they are installed and put only those programs on PATH",
       );
       expect(text).toContain("Never put a whole version-manager folder on PATH");
+      // They ship to every fork: no repository's own names, which each run takes from its checkout.
+      expect(text).not.toMatch(/leonvanzyl|harperaa/i);
+      expect(text).toContain(
+        "The defaults in `scripts/harden/fork-config.sh` apply only in CodeHarden's own repository; a fork has its own values there or in its repository variables. Below, UPSTREAM means the upstream branch and WORKING means the working branch.",
+      );
       // Nothing is filled in from the project or the trigger.
       expect(text).not.toContain("{{");
     }

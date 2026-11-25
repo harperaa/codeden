@@ -24,7 +24,7 @@ Read first, every run: `AGENTS.md` (all of it), the header comment of `.github/w
 
 ## Names
 
-Take them from the repository, never from memory: source `scripts/harden/fork-config.sh` the way `scripts/harden/release.sh` does, or read the repository variables `UPSTREAM_REPO`, `UPSTREAM_BRANCH`, `HARDEN_BRANCH`, `MIRROR_BRANCH`. For CodeHarden itself they are upstream `leonvanzyl/codeden` branch `main`, working branch `harden`, mirror branch `main`. Below, UPSTREAM means the upstream branch and WORKING means the working branch.
+Take them from the repository, never from memory: source `scripts/harden/fork-config.sh` the way `scripts/harden/release.sh` does, or read the repository variables `UPSTREAM_REPO`, `UPSTREAM_BRANCH`, `HARDEN_BRANCH`, `MIRROR_BRANCH`. The defaults in `scripts/harden/fork-config.sh` apply only in CodeHarden's own repository; a fork has its own values there or in its repository variables. Below, UPSTREAM means the upstream branch and WORKING means the working branch.
 
 ## Rules that always hold
 
