@@ -96,6 +96,29 @@ export function github() {
         })),
       );
     },
+    /**
+     * A branch as the quarantine asks about it: where it is now (`tip`, by default where the
+     * newest update left it) and its updates `[time, after, type = "push", before]`, newest
+     * first. An update starts where the one below it ended unless `before` says otherwise.
+     */
+    branch(name, rows, tip = rows[0]?.[1]) {
+      const file = name.replaceAll("/", "__");
+      if (tip)
+        put(`refs/${file}.json`, {
+          ref: `refs/heads/${name}`,
+          object: { type: "commit", sha: tip },
+        });
+      put(
+        `activity/${file}.json`,
+        rows.map(([timestamp, after, activity_type = "push", before], i) => ({
+          timestamp,
+          after,
+          activity_type,
+          before: before ?? rows[i + 1]?.[1] ?? "0".repeat(40),
+          ref: `refs/heads/${name}`,
+        })),
+      );
+    },
     /** The pull requests GitHub ties to a commit of the default branch. */
     pullsOfCommit(sha, pulls) {
       put(`commit-pulls/${sha}.json`, pulls);

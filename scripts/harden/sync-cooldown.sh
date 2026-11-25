@@ -46,6 +46,11 @@ set -euo pipefail
 
 # The one place these are written. A workflow or a script that needs one reads it from here.
 COOLDOWN_HOURS=48
+# The other wait, before a sync exists at all: how long an upstream commit must have been on
+# upstream's branch before anything of it is fetched, installed, built or tested. This file's
+# rule does not use it; scripts/harden/upstream-eligible.sh does. Two names, so that changing
+# one wait never changes the other by accident.
+QUARANTINE_HOURS=48
 APPROVED_LABEL="sync-approved"
 HOLD_LABEL="sync-hold"
 SYNC_HEAD_PREFIX="sync/"

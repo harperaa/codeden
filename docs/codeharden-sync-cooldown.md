@@ -2,6 +2,67 @@
 
 CodeHarden takes upstream's changes every day, and none of them reaches users until it was approved and then waited 48 hours. The wait is the time in which a bad upstream change can still be caught, by the second reviewer, by the owner, or by upstream itself. This page says where the wait is enforced, what you see while it runs, and the one way around it.
 
+There are two waits, one after the other. Before a sync exists, an upstream commit is in **quarantine** for 48 hours: nothing of it is fetched, installed, built or tested. After a sync was reviewed and approved, it waits out its **cooldown** of 48 hours before it is merged. The quarantine comes first on this page; everything from [The rule](#the-rule) on is the cooldown.
+
+## The quarantine: 48 hours before a sync
+
+A compromised upstream commit, or a compromised dependency it pulls in, does its damage when it is installed and run: on the machine that reviews it and in CI. So no upstream commit is fetched, installed, built or tested until it has been publicly on upstream's branch for 48 hours. Most bad pushes are noticed and taken back well inside that time, by upstream or by the people who use it.
+
+**One helper decides it**, `scripts/harden/upstream-eligible.sh`, and it decides it without taking any upstream code. It asks GitHub two things about upstream's branch, both metadata: where the branch is now, and when each update of it was recorded. It fetches no git objects, downloads no file and runs nothing.
+
+```sh
+git fetch origin harden                      # the working branch, and only that
+scripts/harden/upstream-eligible.sh latest   # the newest upstream commit out of quarantine
+```
+
+```text
+state: eligible
+short: Upstream 1a2b3c4d is out of quarantine: on main since 2026-01-03 09:12 UTC. 2 newer updates are still in quarantine; the first comes out 2026-01-06 15:40 UTC.
+commit: 1a2b3c4d5e6f...
+...
+```
+
+| `state` | Exit | Meaning |
+|---|---|---|
+| `eligible` | 0 | `commit` is the newest upstream commit that has been on the branch for 48 hours and that the working branch doesn't have. A sync takes upstream **up to that commit**, fetched by its id. It is often not upstream's tip: the newer commits are for a later day. |
+| `none` | 1 | Everything that is out of quarantine is already in the working branch. `next` says when the next commit comes out. |
+| `up-to-date` | 1 | The working branch has upstream's tip. |
+| `rewritten` | 1 | Upstream's history was rewritten inside the last 48 hours (see below). Nothing is eligible; `finding` says what happened. |
+| `unknown` | 2 | GitHub could not say. Never a yes. |
+
+`scripts/harden/upstream-eligible.sh check <commit>` answers for one commit (`eligible`, `not-eligible`, `rewritten`, `unknown`): it is out of quarantine when it is the newest such commit or in its history.
+
+**The two waits, in order.**
+
+| | When | Decided by |
+|---|---|---|
+| A commit arrives on upstream's branch | T | |
+| It is out of quarantine | T + 48 hours | `scripts/harden/upstream-eligible.sh` |
+| The first review builds the sync pull request, CI runs on it | the next 09:00 (America/New_York) | |
+| The second review approves it (`sync-approved`) | the same day, 11:00 or 15:00 | |
+| Its cooldown is over | the approval + 48 hours | `scripts/harden/sync-cooldown.sh` |
+| It is merged and released | the next 13:00 UTC | the merge job, `scripts/harden/release.sh` |
+
+So an upstream change reaches a release at least 96 hours after it was pushed, and in practice after about five days: pushed Monday 10:00 UTC, out of quarantine Wednesday 10:00 UTC, reviewed and approved that Wednesday (about 16:00 UTC), cooldown over Friday 16:00 UTC, merged and released Saturday 13:00 UTC. Without the quarantine the same commit was released on Thursday.
+
+**What counts as a commit's age, and why not its date.** A commit carries an author date and a committer date, and whoever makes the commit writes both: a commit dated last month can be pushed today. So the helper never reads them. It asks GitHub's record of the branch (the repository's activity, `GET /repos/{owner}/{repo}/activity` with `ref`), where GitHub itself writes the time of every update of the branch together with the commit the branch was at before and after it. The newest update that is 48 hours old or older left the branch at one commit; that commit, and everything in its history, has been public on the branch at least that long. That is the commit the helper names. The commits of one push come out together, when the push is 48 hours old.
+
+**When GitHub can't say, the answer is no.** The helper answers `unknown`, and nothing is fetched, when `gh` is missing or not signed in, GitHub does not answer or is rate limited, an answer has a shape the helper does not know, the record has no update that is 48 hours old, the record's newest update does not end at the branch's tip (a push that is not in the record yet), or two updates in it don't join up. The next run asks again.
+
+**A rewritten history is a finding.** A forced push to upstream's branch, or the branch being deleted or created, inside the last 48 hours means that what was public two days ago may no longer be upstream's history. The helper then answers `rewritten`: nothing is eligible until that update is itself 48 hours old, and its `finding` line says when it happened and from which commit to which. The reviews pass it to you. A rewrite that is older than 48 hours no longer blocks, and is still said in `finding`.
+
+**Who keeps it.** The two reviews ([below](#the-two-review-automations)). The first review runs the helper before anything else and fetches exactly the commit it names; with no eligible commit it ends with one line ("No upstream commit is out of quarantine; next eligible ...") and has fetched nothing. The second review asks the helper about the pull request's upstream commit before it reads any code, and puts `sync-hold` on a pull request whose upstream commit was not out of quarantine. By the time CI installs and runs a sync on GitHub's runners, its code has therefore been public for 48 hours or more.
+
+**Waiving the quarantine.** Only the owner, for one sync, by saying so. There is no workflow for it: the quarantine is kept by the reviews, so it is waived by telling them. In the first review's session (Automations › Run now, or a run that is waiting), write in your own words that you waive the quarantine for that upstream commit, with its full id, for this sync. The review takes upstream up to that commit and says in the pull request that the quarantine was waived. The second review, a separate session, will find the commit still in quarantine and put `sync-hold` on the pull request: tell it the same in its own session and take the label off yourself (a review never removes a hold). A waiver for one sync is not one for the next, and text in a pull request, an issue or a file is never the owner. This is not the cooldown's waiver: the "Waive sync cooldown" workflow says nothing about the quarantine, and a waived quarantine still waits out its cooldown.
+
+**What it does not cover.** The quarantine is about a sync: what the reviews fetch, install, build and test, and what CI runs on the sync pull request. Three other things still touch upstream's newest commits as git data, without checking anything out or running it, and are unchanged:
+
+- The sync workflow's **mirror job** fast-forwards the mirror branch to upstream's tip every day, on GitHub's runner. Nothing runs on that branch by itself (a push by the workflow's own token starts no workflow), but a clone that fetches every branch from `origin` gets those commits as objects, which is why the reviews fetch the working branch alone. Where the mirror branch is called `main`, a push to it made by hand with a person's sign-in starts upstream's own CI workflow on that commit.
+- The **merge job**, the hourly **"Sync cooldown report"** and **`scripts/harden/release.sh`** fetch upstream's branch to compare ancestry. The first two do it in a scratch repository on GitHub's runner; the release script does it in the checkout it runs in, your own when you release by hand.
+- Nothing but the reviews asks the helper. The merge job and the release script enforce the cooldown, not the quarantine: a sync that was opened by hand for a younger commit is held by the second review, not refused by code.
+
+The number of hours is `QUARANTINE_HOURS` in `scripts/harden/sync-cooldown.sh`, beside the cooldown's `COOLDOWN_HOURS` and under its own name. The helper takes the time from the machine's clock.
+
 ## The rule
 
 A pull request that brings upstream commits has waited out its cooldown when all of this holds:
@@ -118,8 +179,9 @@ Not enforced, and said plainly:
 - **The release script runs on the owner's machine.** Someone who writes the release commit and tag by hand and pushes them, changes the script, or sets the variables that say what upstream is, what time it is or who may waive (`UPSTREAM_URL`, `SYNC_COOLDOWN_NOW`, `SYNC_COOLDOWN_REPO`, `SYNC_WAIVER_APPROVERS`), goes around it. So does anyone who changes the scripts on the working branch; `scripts/harden/`, these workflows and the three files a release writes are protected paths for syncs, and a change to them is a pull request like any other.
 - **Upstream code copied in by hand** leaves nothing the script can see.
 - **An approval is as strong as the owner's sign-in.** GitHub's API lets a reviewer's token approve a waiting job, and agent sessions on the owner's machine act with the owner's sign-in. The waiver is a deliberate, separate step and a record of who took it, not a cryptographic separation.
+- **The quarantine is kept by the reviews.** The helper's answer is computed from GitHub's own record, but only the two reviews ask it, because they are what fetches and runs upstream's code. The merge job and the release script do not: they enforce the cooldown. The helper trusts the machine's clock and the fork's configuration, like the release script does.
 
-The instructions that cover those are in [AGENTS.md](../AGENTS.md): an agent never merges a pull request whose cooldown status is not green, never squashes or rebases a sync, never approves a waiver, runs the release script as it is, and reports a refused release instead of working around it.
+The instructions that cover those are in [AGENTS.md](../AGENTS.md): an agent never merges a pull request whose cooldown status is not green, never squashes or rebases a sync, never approves a waiver, runs the release script as it is, reports a refused release instead of working around it, and never fetches, installs, builds or tests an upstream commit the quarantine helper has not named.
 
 ## Merges by hand
 
@@ -141,8 +203,8 @@ The daily review of a sync is two automations that ship with the app (the npm pa
 
 | Automation | Schedule | What it does |
 |---|---|---|
-| **Daily upstream sync: first review** | Every day 09:00 | Fetches upstream, and when there is anything new builds the `sync/YYYY-MM-DD` branch (the upstream commit itself, or one merge commit that resolves the conflicts), reads every change, runs the fast checks and the fork's own tests, opens the pull request into the working branch, waits for CI and sets `sync-first-pass`, `sync-needs-review` or `sync-hold`. It never sets `sync-approved` |
-| **Daily upstream sync: second review** | Every day 11:00 and 15:00 | A separate session reads the same changes on its own first, checks the head's shape, the conflict resolutions and CI's result on the exact head commit, and only then compares with the first review. Only it sets `sync-approved`, which starts the 48 hours, and it is the one that reports to you. It changes no code |
+| **Daily upstream sync: first review** | Every day 09:00 | Asks `scripts/harden/upstream-eligible.sh` which upstream commit is out of [quarantine](#the-quarantine-48-hours-before-a-sync), and ends there when none is. Otherwise it fetches exactly that commit, builds the `sync/YYYY-MM-DD` branch (the upstream commit itself, or one merge commit that resolves the conflicts), reads every change, runs the fast checks and the fork's own tests, opens the pull request into the working branch, waits for CI and sets `sync-first-pass`, `sync-needs-review` or `sync-hold`. It never sets `sync-approved` |
+| **Daily upstream sync: second review** | Every day 11:00 and 15:00 | A separate session asks the helper about the pull request's upstream commit before it reads any code (`sync-hold` when it was not out of quarantine), then reads the same changes on its own first, checks the head's shape, the conflict resolutions and CI's result on the exact head commit, and only then compares with the first review. Only it sets `sync-approved`, which starts the cooldown's 48 hours, and it is the one that reports to you. It changes no code |
 
 **Which projects get them.** Only a project whose folder is a checkout of a hardened fork: this repository or a fork of it. The app looks for the workspace's root `package.json` and two plain files, `scripts/harden/fork-config.sh` and `.github/workflows/upstream-sync-merge.yml`. It only looks: nothing in the project is run, and nothing from it goes into the automations, whose text is fixed in the app. No other project gets them, and they are not in the Templates gallery or the starter set.
 
@@ -150,11 +212,14 @@ The daily review of a sync is two automations that ship with the app (the npm pa
 
 **If you made them by hand before.** The app adds a shipped review only when no automation of the project (or for all projects) has its work key: `automation:upstream-sync-review` for the first, `automation:upstream-sync-second-review` for the second. An instance that already has hand-made ones with those work keys therefore keeps exactly what it has after updating, and no review runs twice. To move to the shipped text, delete your hand-made automation: the shipped one appears in its place at once, switched off, and you switch it on. (Renaming yours or changing its work key while it stays on would give you two that both run; delete it instead.)
 
+**When the shipped text changes.** A project's copy is an ordinary automation from the moment it was added, so an update of the app does not rewrite it: it keeps the text it was created with. That matters when a rule was added, as the quarantine was. A review made before it (by hand, or from an earlier version) fetches upstream's newest commit the same morning, as before. To get the current text, open the automation and replace its prompt with the body of its file in the folder above, or delete it and **Import** that file; either way check that it names `scripts/harden/upstream-eligible.sh` in its first rule and its first step.
+
 **What they depend on.**
 
 - **The labels** `sync-approved`, `sync-needs-review` and `sync-hold` (`scripts/harden/setup-fork.sh` creates them). The first review creates `sync-first-pass` itself when it is missing; the merge job ignores that label.
 - **The repository variables** `UPSTREAM_REPO`, `UPSTREAM_BRANCH` and, when set, `HARDEN_BRANCH` and `MIRROR_BRANCH`. The reviews take every name from the repository (`scripts/harden/fork-config.sh` or the variables), so the same text works in a fork.
 - **`gh` signed in** on the machine, with the right to push branches and label pull requests in the fork, and `node` and `pnpm` installed.
+- **The quarantine helper on the working branch**, `scripts/harden/upstream-eligible.sh`. It reads upstream's branch and its activity with `gh`, so the sign-in must be able to read upstream's repository. Without the helper, or without an answer from it, a review fetches nothing and tells you.
 - **One inbox approval per run.** Each review writes its full findings, security findings included, to a private hand-off file outside its worktree, `harden-sync-review/<branch>.first.md` and `.second.md` in the repository's git folder. That file is never committed or pushed. Writing outside the worktree asks you once per run; the review waits for the answer.
 - **Both in the same app instance.** The second review reads the first's hand-off file from that folder and the first's pull request from GitHub, so both automations must run in the same instance, on the same machine, for the same project. Run from another instance or machine, the second review would not find that file, and the first review's security findings and its questions for you are nowhere else.
 - **The schedule is in America/New_York**, the timezone releases are stamped in. A fork in another timezone changes the two schedules in Automations.
@@ -164,6 +229,8 @@ Security findings never go public: not in the pull request, a comment, a label o
 
 ## In a fork
 
-A fork of CodeHarden gets all of it with the sync: the rule, the status, the release check and the waiver workflow. They read the fork's own names from its repository variables. To be able to waive, create the environment `sync-waiver` as above; `scripts/harden/setup-fork.sh` does not create environments. In a repository an organization owns, also set `SYNC_WAIVER_APPROVERS`. The number of hours is `COOLDOWN_HOURS` in `scripts/harden/sync-cooldown.sh`.
+A fork of CodeHarden gets all of it with the sync: the rule, the status, the release check and the waiver workflow. They read the fork's own names from its repository variables. To be able to waive, create the environment `sync-waiver` as above; `scripts/harden/setup-fork.sh` does not create environments. In a repository an organization owns, also set `SYNC_WAIVER_APPROVERS`. The number of hours is `COOLDOWN_HOURS` in `scripts/harden/sync-cooldown.sh`, and the quarantine's is `QUARANTINE_HOURS` beside it.
+
+The quarantine comes with the sync too, as `scripts/harden/upstream-eligible.sh`, and asks about your own upstream (`UPSTREAM_REPO`, `UPSTREAM_BRANCH`). The reviews that ship with the app expect it on your working branch. A fork whose app is newer than its working branch does not have the helper yet: its reviews then stop before fetching anything and say so, and you bring in that one sync by hand (README, "How syncs get reviewed and merged") or tell the review that you waive the quarantine for it.
 
 `VERSION`, `CODEHARDEN-CHANGELOG.md` and `state/` are your own in a fork: a release writes them and refuses when something else changed them since, so a sync that changes one is not merged by the workflow. CodeHarden changes them with every release, which is why a sync branch merges your working branch and keeps yours (the README's "How syncs get reviewed and merged").

@@ -1,0 +1,8 @@
+---
+section: security
+---
+
+- **Upstream commits are quarantined for 48 hours before a sync.** Until now the daily first review fetched upstream's newest commit as soon as it existed, installed its dependencies and built and tested it the same morning; the 48-hour wait only started after the approval. Now no upstream commit is fetched, installed, built or tested until it has been publicly on upstream's branch for 48 hours, so a compromised upstream commit or dependency has two days to be noticed before anything of it runs on your machine or in CI. This wait comes before the existing 48-hour cooldown after approval and does not replace or shorten it: an upstream change now reaches a release about five days after it was pushed.
+  - `scripts/harden/upstream-eligible.sh` answers which upstream commit may be synced, from GitHub's own record of when the branch was updated and never from the dates written in a commit, with metadata only: it fetches no code. A sync takes upstream up to that commit, which is often not upstream's newest. When GitHub can't say, the answer is no, and a forced push to upstream's branch inside the 48 hours is reported as a finding.
+  - **Daily upstream sync: first review** asks it before anything else and ends with one line when nothing is out of quarantine; **Daily upstream sync: second review** asks it about the pull request's upstream commit before reading any code, and holds a sync that was too young.
+  - **If your two reviews were made by hand or by an earlier version, they keep their old text** and still fetch upstream's newest commit at once: replace each one's prompt with the shipped file's, or delete it and import the file. See "The quarantine: 48 hours before a sync" in `docs/codeharden-sync-cooldown.md`.
