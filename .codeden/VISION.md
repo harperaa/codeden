@@ -1,15 +1,18 @@
 # Vision
-- CodeDen is the ultimate tool for Agentic Coding.
+
+CodeHarden is a hardened fork of CodeDen: the same tool for agentic coding, kept current with upstream, with security-first defaults, its own identity, and nothing reaching users that has not been reviewed.
+
+- CodeHarden is the ultimate tool for Agentic Coding.
 - It has support for all major providers and agentic coding features.
 - It offers full traceability - like what subagents are doing, costs and much more.
 - The UI is sleek and easy to navigate for "vibe coders" and experienced developers alike.
 - It "scales with the user" - users can create single sessions themselves, use PMs, Orchestrators, scale up to software factories and atonomous "dark factories"
 - Automations are easy to create and share, allowing users to easily switch on tasks that automatically run in the background
-- CodeDen supports agent skills, memory files, MCP servers and modern agentic coding tech
-- CodeDen does not waste space. Worktrees are automatically cleaned and removed once sessions are archived.
-- CodeDen supports advanced ADE features, like integrated browsers, computer use, dedicated agent computers and much more.
+- CodeHarden supports agent skills, memory files, MCP servers and modern agentic coding tech
+- CodeHarden does not waste space. Worktrees are automatically cleaned and removed once sessions are archived.
+- CodeHarden supports advanced ADE features, like integrated browsers, computer use, dedicated agent computers and much more.
 - Your job is to stay informed and up to date with the tools and features available in modern ADEs.
-- Your job is to research the latest developments in software factories, dark factories and agentic coding tools to ensure CodeDen is on the cutting edge.
+- Your job is to research the latest developments in software factories, dark factories and agentic coding tools to ensure CodeHarden is on the cutting edge.
 
 ## Goals
 - What should this project achieve in the next months?
