@@ -64,7 +64,7 @@ function clientWith(api: Partial<CodeDenClient["devPreview"]>): CodeDenClient {
 const value = (testId: string) => (screen.getByTestId(testId) as HTMLInputElement).value;
 
 describe("the dev preview settings of a checkout of this repository", () => {
-  it("open with the four values filled in and Start preview…, and store nothing before the confirmation", async () => {
+  it("open with the four values filled in and Save…, and store nothing before the confirmation", async () => {
     const confirmProject = vi.fn(async () => view());
     renderWithClient(
       <DevPreviewProjectSettings project={project} />,
@@ -81,9 +81,11 @@ describe("the dev preview settings of a checkout of this repository", () => {
     expect(screen.getByTestId("dev-preview-recommended").textContent).toContain(
       "The fields below are filled in with the values that work for it. Nothing is stored or run until you confirm them.",
     );
-    // No typing: the form's own button, which asks first.
+    // No typing: the form's own button, which asks first. It starts nothing by itself: the PM
+    // thread's preview is off until the person switches it on.
     const start = screen.getByTestId("dev-preview-save") as HTMLButtonElement;
-    expect(start.textContent).toBe("Start preview…");
+    expect(start.textContent).toBe("Save…");
+    expect(recommended.settings.pmEnabled).toBe(false);
     expect(start.disabled).toBe(false);
     expect(confirmProject).not.toHaveBeenCalled();
     fireEvent.click(start);
@@ -154,14 +156,39 @@ describe("the dev preview settings of a checkout of this repository", () => {
 });
 
 describe("the PM thread's strip", () => {
-  it("leads to the dev preview section of the settings", async () => {
+  it("asks for the recommended settings when it is switched on, and starts with them", async () => {
+    const confirmProject = vi.fn(async () => view());
     renderWithClient(
       <DevPreviewPmBar projectId={PROJECT} />,
-      clientWith({ base: async () => baseState({ configured: false }) }),
+      clientWith({
+        base: async () => baseState({ configured: false, enabled: false }),
+        project: async () => view(),
+        confirmProject,
+      }),
     );
-    const hint = await screen.findByTestId("dev-preview-hint");
-    expect(hint.querySelector("a")?.getAttribute("href")).toBe(
+    const toggle = await screen.findByTestId("dev-preview-switch");
+    await waitFor(() => expect(toggle).toHaveProperty("disabled", false));
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    // A recommendation exists, so the strip doesn't send the person to the settings.
+    expect(screen.queryByTestId("dev-preview-hint")).toBeNull();
+    fireEvent.click(toggle);
+    const dialog = await screen.findByTestId("dev-preview-confirm");
+    expect(dialog.textContent).toContain("node scripts/harden/dev-preview/run.mjs");
+    expect(dialog.textContent).toContain("pnpm install --frozen-lockfile");
+    expect(dialog.textContent).toContain("Ports go in WEB_PORT, API_PORT.");
+    expect(dialog.textContent).toContain("The link opens the first port.");
+    expect(dialog.textContent).toContain("A CodeHarden checkout");
+    expect(screen.getByTestId("dev-preview-confirm-edit").getAttribute("href")).toBe(
       `/projects/${PROJECT}?tab=settings#dev-preview`,
+    );
+    expect(confirmProject).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId("dev-preview-confirm-run"));
+    // Stored with the PM thread's preview on, which is what starts it: the person's switch.
+    await waitFor(() =>
+      expect(confirmProject).toHaveBeenCalledWith(PROJECT, {
+        ...recommended.settings,
+        pmEnabled: true,
+      }),
     );
   });
 
