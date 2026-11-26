@@ -337,4 +337,49 @@ describe("the per-item spend cap (#325)", () => {
     expect(env.starts.length).toBe(starts);
     expect(env.messages.length).toBe(messages);
   });
+
+  /** A build whose builder session died: a failure the loop puts back by itself. */
+  async function builderDied() {
+    env = capped({ usd: 5 });
+    await enable();
+    const created = backlogItem();
+    await tick();
+    const builder = item(created.id).builderSessionId as string;
+    env.ranTurn(builder);
+    await env.setStatus(builder, "failed");
+    env.factory.data.updateItem(created.id, (i) => ({
+      ...i,
+      stage: "failed",
+      reason: "The builder session failed",
+      failureKind: "infrastructure",
+      finishedAt: new Date().toISOString(),
+    }));
+    return { id: created.id, builder };
+  }
+
+  it("stops a failed item over its cap instead of putting it back by itself", async () => {
+    const { id, builder } = await builderDied();
+    env.spendOn(builder, 6);
+    const starts = env.starts.length;
+    const messages = env.messages.length;
+    await tick();
+    expect(item(id)).toMatchObject({
+      stage: "failed",
+      failureKind: "stuck",
+      reason: "Spend cap reached: $6.00 of $5.00 for this item",
+    });
+    expect(env.inbox.find(stuckInboxId(id))?.status).toBe("open");
+    // Stuck is for a person: later ticks start nothing for it either.
+    await tick();
+    expect(item(id)).toMatchObject({ stage: "failed", failureKind: "stuck" });
+    expect(env.starts.length).toBe(starts);
+    expect(env.messages.length).toBe(messages);
+  });
+
+  it("puts the same failed item back while it is under its cap", async () => {
+    const { id, builder } = await builderDied();
+    env.spendOn(builder, 4);
+    await tick();
+    expect(item(id)).toMatchObject({ stage: "building", failureKind: null, reason: null });
+  });
 });
