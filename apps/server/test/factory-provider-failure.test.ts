@@ -216,7 +216,9 @@ describe("an item's provider restarts and skipped providers", () => {
     expect(providerRestarts(withNudges({ reviewer_failed_1: stamp }))).toBe(0);
   });
 
-  it("keeps the count through a reviewer's turn that worked: it is per item, not in a row", async () => {
+  // Pins current behaviour. Issue #57 suggested "it starts again after a turn that worked"; that
+  // was a guess, corrected in a comment on #57: nothing resets the count but a retry of the item.
+  it("pins current behaviour: a reviewer's turn that worked does not reset the count, it is per item", async () => {
     await enable();
     const { id } = await verifying("pending");
     const first = item(id).reviewerSessionId as string;
