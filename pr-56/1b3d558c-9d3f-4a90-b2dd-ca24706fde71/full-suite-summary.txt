@@ -1,0 +1,3 @@
+ Test Files  693 passed | 12 skipped (705)
+      Tests  6054 passed | 47 skipped (6101)
+   Duration  217.92s (tests 64%, import 19%, transform 12%, environment 4%, setup 1%)

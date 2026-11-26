@@ -1,0 +1,53 @@
+
+ RUN  v5.1.0 /Users/allenharper/.codeharden/wt/codeharden/1b3d558c
+
+ ✓ |@codeden/server| test/role-fallback.test.ts > limitReset > goes back only once the reset time and its margin have passed 2ms
+ ✓ |@codeden/server| test/role-fallback.test.ts > limitReset > never goes back by itself without a reset time, or with one it can't read 0ms
+ ✓ |@codeden/server| test/role-fallback.test.ts > afterLimit > records the role's own provider as home, skipped until the reset time it gave 0ms
+ ✓ |@codeden/server| test/role-fallback.test.ts > afterLimit > skips a provider that gave no reset time for an hour, and never goes back by itself 0ms
+ ✓ |@codeden/server| test/role-fallback.test.ts > afterLimit > treats a reset time it can't read as none 0ms
+ ✓ |@codeden/server| test/role-fallback.test.ts > afterLimit > still skips the provider that just failed when its reset time has passed already 0ms
+ ✓ |@codeden/server| test/role-fallback.test.ts > afterLimit > a second limit keeps the home and its reset time, and adds the fallback to the skipped 0ms
+ ✓ |@codeden/server| test/role-fallback.test.ts > afterLimit > drops skipped providers whose limit has passed 0ms
+ ✓ |@codeden/server| test/role-fallback.test.ts > afterLimit > a later limit of the same provider replaces its earlier time 0ms
+ ✓ |@codeden/server| test/role-fallback.test.ts > pickFallback > takes the preferred providers first, in their order, skipping Auto and unset ones 0ms
+ ✓ |@codeden/server| test/role-fallback.test.ts > pickFallback > then every loaded provider in the order Auto tries them, others last 0ms
+ ✓ |@codeden/server| test/role-fallback.test.ts > pickFallback > skips a provider at its limit until that has passed 0ms
+ ✓ |@codeden/server| test/role-fallback.test.ts > pickFallback > never picks a provider the runner didn't load 0ms
+ ✓ |@codeden/server| test/role-fallback.test.ts > pickFallback > never picks a provider that can't run read-only 0ms
+ ✓ |@codeden/server| test/role-fallback.test.ts > pickFallback > only picks a ready provider when readiness is known 0ms
+ ✓ |@codeden/server| test/role-fallback.test.ts > pickFallback > is null when every provider is at a limit 0ms
+ ✓ |@codeden/server| test/role-fallback.test.ts > the line about a switch > names the role 0ms
+ ✓ |@codeden/server| test/role-fallback.test.ts > the line about a switch > says why the role moved, with the reset time in the given timezone 12ms
+ ✓ |@codeden/server| test/role-fallback.test.ts > the line about a switch > names the provider whose limit reset when the role goes back 0ms
+ ✓ |@codeden/server| test/role-fallback.test.ts > the line about a switch > says that nothing was switched when no provider could take over 0ms
+ ✓ |@codeden/server| test/clone-check.test.ts > checkClone > asks a connected runner about the session's clone, without touching the container 2ms
+ ✓ |@codeden/server| test/clone-check.test.ts > checkClone > reports each kind of work on its own: a stash, an uncommitted file, an unpushed commit 0ms
+ ✓ |@codeden/server| test/clone-check.test.ts > checkClone > a clone that was never made is clean; any other failure leaves it unknown 1ms
+ ✓ |@codeden/server| test/clone-check.test.ts > checkClone > doesn't wake a runner that isn't connected when asked not to wait 0ms
+ ✓ |@codeden/server| test/clone-check.test.ts > checkClone > starts a stopped container, waits for its runner, then asks 0ms
+ ✓ |@codeden/server| test/clone-check.test.ts > checkClone > only waits for the runner of a container that is running already 0ms
+ ✓ |@codeden/server| test/clone-check.test.ts > checkClone > is unknown, never clean, when the container is gone, can't be started or doesn't answer 0ms
+ ✓ |@codeden/server| test/clone-check.test.ts > the outcome of a removal the check decided on > keeps the container while its clone has work, naming all of it 0ms
+ ✓ |@codeden/server| test/clone-check.test.ts > the outcome of a removal the check decided on > keeps the container when the clone couldn't be checked, as a failure with the reason 0ms
+ ✓ |@codeden/server| test/clone-check.test.ts > the outcome of a removal the check decided on > removes only a clean clone without being forced 0ms
+ ✓ |@codeden/server| test/clone-check.test.ts > the outcome of a removal the check decided on > a forced removal says what was deleted, or that it couldn't know 0ms
+ ✓ |@codeden/runner| test/git-diff.test.ts > parseNameStatus > reads one path per entry for added, modified, deleted and type-changed files 2ms
+ ✓ |@codeden/runner| test/git-diff.test.ts > parseNameStatus > reads two paths for a rename or copy, whatever its similarity score, and stays aligned 0ms
+ ✓ |@codeden/runner| test/git-diff.test.ts > parseNameStatus > keeps paths with spaces, tabs and newlines whole 0ms
+ ✓ |@codeden/runner| test/git-diff.test.ts > parseNameStatus > treats a status it doesn't know as modified, and takes a Buffer 0ms
+ ✓ |@codeden/runner| test/git-diff.test.ts > parseNameStatus > returns nothing for an empty diff 0ms
+ ✓ |@codeden/runner| test/git-diff.test.ts > parseNumStat > reads additions, deletions and the path of each file 0ms
+ ✓ |@codeden/runner| test/git-diff.test.ts > parseNumStat > marks a binary file, with no counts 0ms
+ ✓ |@codeden/runner| test/git-diff.test.ts > parseNumStat > files a rename under its new path and stays aligned for the entries after it 0ms
+ ✓ |@codeden/runner| test/git-diff.test.ts > parseNumStat > keeps a path with spaces whole 0ms
+ ✓ |@codeden/runner| test/git-diff.test.ts > parseNumStat > returns nothing for an empty diff 0ms
+ ✓ |@codeden/runner| test/git-diff.test.ts > diffTrees > lists each file once with its status and counts, a rename under its new path 211ms
+ ✓ |@codeden/runner| test/git-diff.test.ts > diffTrees > limits the diff and the list to the given paths 209ms
+ ✓ |@codeden/runner| test/git-diff.test.ts > diffTrees > is empty between a tree and itself 215ms
+
+ Test Files  3 passed (3)
+      Tests  44 passed (44)
+   Start at  04:07:05
+   Duration  1.28s (tests 36%, import 32%, transform 31%, setup 1%)
+
