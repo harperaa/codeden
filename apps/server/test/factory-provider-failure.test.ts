@@ -18,7 +18,7 @@ import {
 import { FACTORY_STARTER } from "../src/services/factory/sessions";
 import { setUnanswered } from "../src/services/sessions/unanswered-start";
 import { createFactoryEnv, type FactoryEnv } from "./support/factory-env";
-import { factorySteps } from "./support/factory-steps";
+import { APPROVE, factorySteps } from "./support/factory-steps";
 
 /**
  * Whether a failed factory session failed because of its provider (usage limit, sign-in, a CLI
@@ -32,7 +32,7 @@ beforeEach(() => {
   env = createFactoryEnv();
 });
 afterEach(() => env.close());
-const { item, backlogItem } = factorySteps(() => env);
+const { item, backlogItem, enable, verifying, tick, review } = factorySteps(() => env);
 
 const FAILING_TO_START = { reason: "failing to start", until: null };
 const NOT_SIGNED_IN = { reason: "not signed in", until: null, signin: true };
@@ -214,6 +214,38 @@ describe("an item's provider restarts and skipped providers", () => {
     expect(providerRestarts(withNudges({ reviewer_provider_failed_2: stamp }))).toBe(0);
     // The reviewer's own restarts are a different count.
     expect(providerRestarts(withNudges({ reviewer_failed_1: stamp }))).toBe(0);
+  });
+
+  it("keeps the count through a reviewer's turn that worked: it is per item, not in a row", async () => {
+    await enable();
+    const { id } = await verifying("pending");
+    const first = item(id).reviewerSessionId as string;
+    const firstProvider = env.repo.get(first).provider;
+    turn(first, "u1", { message: "Usage limit", kind: "usage_limit" });
+    set(first, { status: "idle" });
+    await tick();
+    expect(providerRestarts(item(id))).toBe(1);
+    expect(skippedProviders(item(id), env.now()).map((s) => s.provider)).toEqual([firstProvider]);
+
+    // A fresh reviewer on another provider runs a turn that works and gives its verdict.
+    await tick();
+    const second = item(id).reviewerSessionId as string;
+    expect(second).toBeTruthy();
+    expect(second).not.toBe(first);
+    expect(env.repo.get(second).provider).not.toBe(firstProvider);
+    turn(second, "u1");
+    review(id, { ...APPROVE, verdict: "request_changes", summary: "Missing a test" });
+    expect(item(id).review?.verdict).toBe("request_changes");
+    // The earlier failure still counts, and its provider stays skipped until its time.
+    expect(providerRestarts(item(id))).toBe(1);
+    expect(skippedProviders(item(id), env.now()).map((s) => s.provider)).toEqual([firstProvider]);
+
+    // The revise round that follows keeps it too: the item's next provider failure is its second.
+    await env.setStatus(second, "idle");
+    await tick();
+    expect(providerRestarts(item(id))).toBe(1);
+    const nudges = skipProvider(item(id).nudges, env.repo.get(second).provider, null, env.now());
+    expect(providerRestarts({ nudges } as FactoryItem)).toBe(2);
   });
 
   it("starts the count again when the item is retried", () => {
