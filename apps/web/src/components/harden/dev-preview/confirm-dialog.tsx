@@ -37,34 +37,46 @@ export function DevPreviewConfirmDialog({
 }) {
   return (
     <AlertDialog open={asking !== null} onOpenChange={(open) => !open && onCancel()}>
-      <AlertDialogContent data-testid="dev-preview-confirm">
-        <AlertDialogHeader>
-          <AlertDialogTitle>Run these commands on this computer?</AlertDialogTitle>
-          <AlertDialogDescription>
-            The app runs them as you, in this project's worktrees, whenever a preview starts. They
-            run the repository's own code (its dev script, and install scripts in the prepare step),
-            including what an agent wrote in a session, with no approval step and with access to
-            everything you can read. Previews that are running stop now: the PM thread's starts
-            again with the new commands, a session's when you turn it on again.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <div className="space-y-2 text-xs">
-          <Shown label="Dev command" command={asking?.command} />
-          {asking?.prepareCommand && (
-            <Shown label="Prepare command" command={asking.prepareCommand} />
-          )}
-          <p className="text-2xs text-muted-foreground">
-            Ports go in {asking?.portVars.join(", ")}.{" "}
-            {asking?.urlFrom === "output"
-              ? "The link is the first local address the dev command prints."
-              : "The link opens the first port."}{" "}
-            {asking?.pmEnabled
-              ? `A preview of the base branch${baseBranch ? ` (${baseBranch})` : ""} starts for the PM thread, and follows that branch only.`
-              : "No preview starts for the PM thread."}
-          </p>
-          {children}
+      {/* No taller than the window: a column whose first part scrolls and whose footer doesn't,
+          so the two buttons stay in view however short the window is. */}
+      <AlertDialogContent
+        className="flex max-h-[calc(100dvh-2rem)] flex-col"
+        data-testid="dev-preview-confirm"
+      >
+        {/* The side margins take the scrollbar to the dialog's edge and leave room for a
+            focus ring, which a scrolling box would cut off. */}
+        <div
+          className="-mx-4 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 scroll-thin"
+          data-testid="dev-preview-confirm-body"
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>Run these commands on this computer?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The app runs them as you, in this project's worktrees, whenever a preview starts. They
+              run the repository's own code (its dev script, and install scripts in the prepare
+              step), including what an agent wrote in a session, with no approval step and with
+              access to everything you can read. Previews that are running stop now: the PM thread's
+              starts again with the new commands, a session's when you turn it on again.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 text-xs">
+            <Shown label="Dev command" command={asking?.command} />
+            {asking?.prepareCommand && (
+              <Shown label="Prepare command" command={asking.prepareCommand} />
+            )}
+            <p className="text-2xs text-muted-foreground">
+              Ports go in {asking?.portVars.join(", ")}.{" "}
+              {asking?.urlFrom === "output"
+                ? "The link is the first local address the dev command prints."
+                : "The link opens the first port."}{" "}
+              {asking?.pmEnabled
+                ? `A preview of the base branch${baseBranch ? ` (${baseBranch})` : ""} starts for the PM thread, and follows that branch only.`
+                : "No preview starts for the PM thread."}
+            </p>
+            {children}
+          </div>
         </div>
-        <AlertDialogFooter>
+        <AlertDialogFooter className="shrink-0">
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction
             data-testid="dev-preview-confirm-run"
